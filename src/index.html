@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src https://geocoding-api.open-meteo.com https://api.open-meteo.com"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Watch Heart</title>
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark">♥</span>
+          <div>
+            <strong>Watch Heart</strong>
+            <span>Apple Watch 心率接收器</span>
+          </div>
+        </div>
+        <label class="pin-control">
+          <input id="always-on-top" type="checkbox">
+          <span>窗口置顶</span>
+        </label>
+      </header>
+
+      <section class="game-toolbar">
+        <div>
+          <strong>游戏悬浮条</strong>
+          <span>拖动定位，快捷键 Ctrl+Shift+H 显示/隐藏</span>
+        </div>
+        <label class="switch-control">
+          <input id="overlay-visible" type="checkbox">
+          <span>显示</span>
+        </label>
+        <label class="range-control">
+          <span>缩放</span>
+          <input id="overlay-size" type="range" min="50" max="200" value="100">
+          <output id="overlay-size-value">100%</output>
+        </label>
+        <label class="range-control">
+          <span>宽度</span>
+          <input id="overlay-width" type="range" min="360" max="1000" step="20" value="580">
+          <output id="overlay-width-value">580</output>
+        </label>
+        <label class="switch-control">
+          <input id="overlay-passthrough" type="checkbox">
+          <span>鼠标穿透</span>
+        </label>
+        <label class="switch-control">
+          <input id="game-mode" type="checkbox">
+          <span>低占用游戏模式</span>
+        </label>
+      </section>
+
+      <section class="dashboard">
+        <article class="heart-card">
+          <div class="status-row">
+            <span id="status-dot" class="status-dot"></span>
+            <span id="status-text">尚未连接</span>
+            <span id="device-name" class="device-name"></span>
+          </div>
+
+          <div id="heart-pulse" class="heart-pulse">♥</div>
+          <div class="bpm-line">
+            <span id="bpm-value">--</span>
+            <span class="bpm-unit">BPM</span>
+          </div>
+          <div id="zone-pill" class="zone-pill zone-idle">等待心率</div>
+
+          <div class="actions">
+            <button id="connect-button" class="primary-button">扫描并连接</button>
+            <button id="disconnect-button" class="secondary-button" disabled>断开</button>
+          </div>
+        </article>
+
+        <article class="chart-card">
+          <div class="card-heading">
+            <div>
+              <span class="eyebrow">实时趋势</span>
+              <h2>最近 2 分钟</h2>
+            </div>
+            <div class="summary">
+              <div><span>最低</span><strong id="min-value">--</strong></div>
+              <div><span>平均</span><strong id="avg-value">--</strong></div>
+              <div><span>最高</span><strong id="max-value">--</strong></div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="heart-chart"></canvas>
+            <div id="chart-empty" class="chart-empty">连接后显示实时心率曲线</div>
+          </div>
+          <div class="chart-scale"><span>40</span><span>100</span><span>160</span><span>220</span></div>
+        </article>
+      </section>
+
+      <section class="weather-card">
+        <div class="weather-current">
+          <span id="weather-icon" class="large-weather-icon">◌</span>
+          <div>
+            <span class="eyebrow">当前天气</span>
+            <div class="weather-temperature">
+              <strong id="weather-temperature">--°</strong>
+              <span id="weather-description">正在获取天气</span>
+            </div>
+          </div>
+        </div>
+        <div class="weather-details">
+          <div><span>体感</span><strong id="weather-feels-like">--°</strong></div>
+          <div><span>风速</span><strong id="weather-wind">-- km/h</strong></div>
+          <div><span>位置</span><strong id="weather-location">香港</strong></div>
+        </div>
+        <form id="weather-form" class="weather-search">
+          <input id="weather-city" type="text" value="香港" maxlength="40" aria-label="天气城市">
+          <button type="submit" class="secondary-button">更新城市</button>
+          <button id="weather-locate" type="button" class="secondary-button">自动定位</button>
+        </form>
+      </section>
+
+      <section class="music-card">
+        <div class="music-icon">♫</div>
+        <div class="music-copy">
+          <span class="eyebrow">当前媒体与同步歌词</span>
+          <strong id="music-title">等待播放器</strong>
+          <span id="music-artist">播放音乐后会自动读取 Windows 媒体会话</span>
+        </div>
+        <div id="music-lyric" class="music-lyric">找到时间轴歌词后将同步到游戏悬浮条</div>
+        <form id="lyrics-form" class="lyrics-form">
+          <input id="lyrics-title" type="text" maxlength="200" placeholder="歌曲名" aria-label="歌词歌曲名">
+          <input id="lyrics-artist" type="text" maxlength="200" placeholder="歌手（可选）" aria-label="歌词歌手">
+          <button type="submit" class="secondary-button">手动匹配</button>
+          <button id="lyrics-auto" type="button" class="secondary-button">恢复自动</button>
+        </form>
+        <div class="capture-lyrics-control">
+          <label class="switch-control">
+            <input id="lyrics-direct" type="checkbox">
+            <span>优先使用汽水音乐播放器直读</span>
+          </label>
+          <label class="switch-control">
+            <input id="lyrics-auto-hide" type="checkbox">
+            <span>自动隐藏汽水桌面歌词</span>
+          </label>
+          <button id="lyrics-direct-reconnect" type="button" class="secondary-button">安装/重连</button>
+          <span id="lyrics-direct-status">未开启</span>
+        </div>
+      </section>
+
+      <footer>
+        请先在 Apple Watch 开始测量，并保持 iPhone“心率广播”运行。鼠标穿透后按 Ctrl+Shift+L 可恢复操作。天气：Open-Meteo；地址：OpenStreetMap。
+      </footer>
+    </main>
+
+    <div id="device-modal" class="modal hidden" role="dialog" aria-modal="true">
+      <div class="modal-panel">
+        <div class="scanner-icon"><span></span></div>
+        <h2>正在扫描心率设备</h2>
+        <p>请保持 iPhone 蓝牙广播开启，然后从下方选择设备。</p>
+        <div id="device-list" class="device-list">
+          <div class="device-placeholder">正在搜索…</div>
+        </div>
+        <button id="cancel-scan" class="secondary-button">取消扫描</button>
+      </div>
+    </div>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

@@ -1,0 +1,252 @@
+:root {
+  color-scheme: dark;
+  font-family: "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+button {
+  border: 0;
+  font: inherit;
+}
+
+.overlay-bar {
+  -webkit-app-region: drag;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 12px 10px 15px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  background: rgba(10, 12, 18, 0.88);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
+  color: #f7f8fb;
+  backdrop-filter: blur(16px);
+  user-select: none;
+}
+
+.heart-section,
+.weather-section,
+.lyric-section,
+.overlay-controls {
+  display: flex;
+  align-items: center;
+}
+
+.heart-section {
+  min-width: 112px;
+  gap: 6px;
+}
+
+.heart {
+  color: #ff315d;
+  filter: drop-shadow(0 2px 7px rgba(255, 49, 93, 0.55));
+  font-size: 21px;
+  transform-origin: center;
+}
+
+.heart.active {
+  animation: heartbeat var(--beat-duration, 1s) ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+  0%, 32%, 100% { transform: scale(1); }
+  12% { transform: scale(1.18); }
+  21% { transform: scale(1.04); }
+}
+
+#overlay-bpm {
+  min-width: 38px;
+  font-size: 26px;
+  letter-spacing: -0.05em;
+}
+
+.unit {
+  align-self: flex-end;
+  margin-bottom: 4px;
+  color: #7d8596;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.divider {
+  width: 1px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.weather-section {
+  min-width: 105px;
+  gap: 8px;
+}
+
+.lyric-section {
+  display: block;
+  flex: 1;
+  min-width: 90px;
+  overflow: hidden;
+  text-align: center;
+}
+
+#overlay-lyric {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#overlay-lyric {
+  color: #e8eaf0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.weather-icon {
+  width: 23px;
+  color: #ffc35b;
+  font-size: 21px;
+  text-align: center;
+}
+
+.weather-section div {
+  display: grid;
+  gap: 0;
+}
+
+#overlay-temperature {
+  font-size: 16px;
+  line-height: 1.1;
+}
+
+#overlay-weather-label {
+  overflow: hidden;
+  max-width: 64px;
+  color: #8d95a6;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overlay-controls {
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+  gap: 3px;
+  opacity: 0.34;
+  transition: opacity 120ms ease;
+}
+
+.overlay-bar:hover .overlay-controls {
+  opacity: 1;
+}
+
+.overlay-controls button {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 7px;
+  background: transparent;
+  color: #70798b;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.overlay-controls button:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: white;
+}
+
+#overlay-lock.active {
+  background: rgba(65, 151, 255, 0.16);
+  color: #69a9ff;
+}
+
+.game-mode .overlay-bar {
+  background: rgba(14, 16, 22, 0.96);
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.game-mode .heart {
+  filter: none;
+}
+
+.game-mode .overlay-controls {
+  transition: none;
+}
+
+@media (max-width: 480px) {
+  .overlay-bar {
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 15px;
+  }
+
+  .heart-section {
+    min-width: 91px;
+    gap: 4px;
+  }
+
+  .heart {
+    font-size: 19px;
+  }
+
+  #overlay-bpm {
+    min-width: 32px;
+    font-size: 22px;
+  }
+
+  .weather-section {
+    min-width: 55px;
+    gap: 5px;
+  }
+
+  .weather-icon {
+    width: 18px;
+    font-size: 17px;
+  }
+
+  #overlay-weather-label {
+    display: none;
+  }
+
+  .lyric-section {
+    min-width: 64px;
+  }
+
+  #overlay-lyric {
+    font-size: 10px;
+  }
+
+  .overlay-controls {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    padding: 2px;
+    border-radius: 9px;
+    background: rgba(10, 12, 18, 0.92);
+  }
+
+  .overlay-controls button {
+    width: 20px;
+    height: 20px;
+  }
+
+  .lyric-section {
+    padding-right: 23px;
+  }
+}

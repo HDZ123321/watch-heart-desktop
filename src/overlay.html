@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'"
+    >
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Watch Heart Overlay</title>
+    <link rel="stylesheet" href="./overlay.css">
+  </head>
+  <body>
+    <main class="overlay-bar">
+      <section class="heart-section">
+        <span id="overlay-heart" class="heart">♥</span>
+        <strong id="overlay-bpm">--</strong>
+        <span class="unit">BPM</span>
+      </section>
+
+      <span class="divider"></span>
+
+      <section class="weather-section">
+        <span id="overlay-weather-icon" class="weather-icon">◌</span>
+        <div>
+          <strong id="overlay-temperature">--°</strong>
+          <span id="overlay-weather-label">天气载入中</span>
+        </div>
+      </section>
+
+      <span class="divider"></span>
+
+      <section class="lyric-section">
+        <strong id="overlay-lyric">播放音乐后显示同步歌词</strong>
+      </section>
+
+      <nav class="overlay-controls">
+        <button id="overlay-smaller" title="缩小">−</button>
+        <button id="overlay-larger" title="放大">＋</button>
+        <button id="overlay-lock" title="鼠标穿透">◇</button>
+        <button id="overlay-close" title="隐藏">×</button>
+      </nav>
+    </main>
+    <script src="./overlay.js"></script>
+  </body>
+</html>

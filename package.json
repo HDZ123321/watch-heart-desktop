@@ -1,0 +1,41 @@
+{
+  "name": "watch-heart-desktop",
+  "version": "1.6.0",
+  "description": "Receive and display Apple Watch heart rate relayed by an iPhone BLE broadcaster.",
+  "main": "src/main.js",
+  "author": "Codex",
+  "license": "MIT",
+  "dependencies": {
+    "@electron/asar": "^4.0.1",
+    "windows-media-sessions": "^1.0.3"
+  },
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "devDependencies": {
+    "electron": "^42.5.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.local.watchheart",
+    "productName": "Watch Heart",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/windows-media-sessions/bin/**/*"
+    ],
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "portable"
+      ]
+    },
+    "portable": {
+      "artifactName": "Watch-Heart-${version}-portable.exe"
+    }
+  }
+}
