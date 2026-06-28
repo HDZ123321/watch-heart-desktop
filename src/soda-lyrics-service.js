@@ -62,7 +62,10 @@ class SodaLyricsDirectService {
       return;
     }
     this.clearLyric();
-    this.preparePlayer().catch((error) => {
+    this.preparePlayer({
+      allowInstall: true,
+      allowLaunch: true
+    }).catch((error) => {
       console.error('SodaMusic direct lyrics reconnect failed:', error);
       this.setStatus('汽水音乐直读重连失败，已使用在线歌词');
     });
@@ -210,7 +213,10 @@ class SodaLyricsDirectService {
     }
   }
 
-  async preparePlayer() {
+  async preparePlayer({
+    allowInstall = false,
+    allowLaunch = false
+  } = {}) {
     this.setStatus('正在检查汽水音乐播放器直读组件…');
     const executable = await this.findSodaMusicExecutable();
     if (!executable) {
@@ -220,17 +226,31 @@ class SodaLyricsDirectService {
 
     const patched = await this.isBridgeInstalled(executable);
     const running = await this.isSodaMusicRunning();
-    if (!patched && running) {
-      this.setStatus('请完全退出汽水音乐，再点击“安装/重连”');
-      return;
-    }
 
     if (!patched) {
+      if (!allowInstall) {
+        this.setStatus(
+          running
+            ? '直读组件未安装；请退出汽水音乐后点击“安装/重连”'
+            : '直读组件未安装，点击“安装/重连”后启用'
+        );
+        return;
+      }
+      if (running) {
+        this.setStatus('请完全退出汽水音乐，再点击“安装/重连”');
+        return;
+      }
       await this.installBridge(executable);
       this.setStatus('直读组件安装完成，正在启动汽水音乐…');
     }
 
-    if (!running) this.launchSodaMusic(executable);
+    if (!running) {
+      if (!allowLaunch) {
+        this.setStatus('汽水音乐未运行，当前使用在线歌词');
+        return;
+      }
+      this.launchSodaMusic(executable);
+    }
     this.setStatus('等待汽水音乐“桌面歌词”…');
   }
 

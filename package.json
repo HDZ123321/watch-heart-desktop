@@ -1,6 +1,6 @@
 {
   "name": "watch-heart-desktop",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Receive and display Apple Watch heart rate relayed by an iPhone BLE broadcaster.",
   "main": "src/main.js",
   "author": "Codex",
@@ -33,6 +33,14 @@
       "target": [
         "portable"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "Watch-Heart-${version}-Setup.${ext}"
     },
     "portable": {
       "artifactName": "Watch-Heart-${version}-portable.exe"
