@@ -99,7 +99,7 @@ class GameService {
   start() {
     clearInterval(this.timer);
     this.detect();
-    this.timer = setInterval(() => this.detect(), 3000);
+    this.timer = setInterval(() => this.detect(), 5000);
   }
 
   stop() {

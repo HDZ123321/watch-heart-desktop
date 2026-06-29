@@ -14,6 +14,11 @@ let controlsInteractive = false;
 let displayedLyric = '';
 let sodaDirectEnabled = false;
 let lyricsMode = 'auto';
+let gameMode = false;
+let lyricTimer;
+let lastBpm = null;
+let lastZone = 'idle';
+let lastWeatherKey = '';
 const DEFAULT_THEME = {
   accent: '#ff315d',
   background: '#0a0c12',
@@ -47,6 +52,8 @@ function applyTheme(theme = {}) {
 }
 
 function applyHeartZone(level) {
+  if (level === lastZone) return;
+  lastZone = level;
   document.body.classList.remove(...zoneClasses);
   if (zoneClasses.includes(`zone-${level}`)) {
     document.body.classList.add(`zone-${level}`);
@@ -107,26 +114,43 @@ function updateLyrics() {
     text.length > 34 ? '10px' : text.length > 22 ? '11px' : '';
 }
 
-window.overlay.onState((state) => {
-  applyHeartZone(state.zoneLevel || 'idle');
-  if (state.connected && state.bpm) {
-    bpmElement.textContent = String(state.bpm);
+function scheduleLyrics() {
+  clearTimeout(lyricTimer);
+  if (document.hidden) return;
+  lyricTimer = setTimeout(() => {
+    updateLyrics();
+    scheduleLyrics();
+  }, gameMode ? 500 : 250);
+}
+
+function updateHeartRate(state) {
+  const bpm = state.connected && state.bpm ? Number(state.bpm) : null;
+  if (bpm === lastBpm) return;
+  lastBpm = bpm;
+  if (bpm) {
+    bpmElement.textContent = String(bpm);
     heartElement.classList.add('active');
-    heartElement.style.setProperty(
-      '--beat-duration',
-      `${Math.max(0.28, 60 / state.bpm)}s`
-    );
+    heartElement.style.setProperty('--beat-duration', `${Math.max(0.28, 60 / bpm)}s`);
   } else {
     bpmElement.textContent = '--';
     heartElement.classList.remove('active');
   }
+}
 
-  if (state.weather) {
-    weatherIcon.textContent = state.weather.icon;
-    temperature.textContent = `${Math.round(state.weather.temperature)}°`;
-    weatherLabel.textContent = `${state.weather.city} · ${state.weather.label}`;
-  }
+function updateWeather(weather) {
+  if (!weather) return;
+  const key = `${weather.icon}|${weather.temperature}|${weather.city}|${weather.label}`;
+  if (key === lastWeatherKey) return;
+  lastWeatherKey = key;
+  weatherIcon.textContent = weather.icon;
+  temperature.textContent = `${Math.round(weather.temperature)}°`;
+  weatherLabel.textContent = `${weather.city} · ${weather.label}`;
+}
 
+window.overlay.onState((state) => {
+  applyHeartZone(state.zoneLevel || 'idle');
+  updateHeartRate(state);
+  updateWeather(state.weather);
   mediaState = state.media;
   sodaLyric = state.sodaLyric;
   updateLyrics();
@@ -136,14 +160,14 @@ window.overlay.onSettings((settings) => {
   passthroughEnabled = settings.passthrough;
   if (!passthroughEnabled) controlsInteractive = false;
   lockButton.classList.toggle('active', settings.passthrough);
-  lockButton.title = settings.passthrough
-    ? '取消鼠标穿透'
-    : '开启鼠标穿透';
-  document.body.classList.toggle('game-mode', settings.gameMode);
+  lockButton.title = settings.passthrough ? '取消鼠标穿透' : '开启鼠标穿透';
+  gameMode = Boolean(settings.gameMode);
+  document.body.classList.toggle('game-mode', gameMode);
   applyTheme(settings.theme);
   lyricsMode = settings.lyricsMode || (settings.lyricsDirectEnabled ? 'auto' : 'online');
   sodaDirectEnabled = lyricsMode !== 'online';
   updateLyrics();
+  scheduleLyrics();
 });
 
 document.querySelector('#overlay-smaller').addEventListener('click', () => {
@@ -159,7 +183,8 @@ document.querySelector('#overlay-close').addEventListener('click', () => {
   window.overlay.close();
 });
 
-setInterval(updateLyrics, 250);
+document.addEventListener('visibilitychange', scheduleLyrics);
+scheduleLyrics();
 
 document.addEventListener('mousemove', (event) => {
   if (!passthroughEnabled) return;

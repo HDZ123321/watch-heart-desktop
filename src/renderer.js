@@ -867,6 +867,7 @@ window.desktop.onOverlaySettings((settings) => {
   overlayControls.width.value = String(settings.width);
   overlayControls.widthValue.textContent = String(settings.width);
   overlayControls.gameMode.checked = settings.gameMode;
+  if (wasLowResourceMode !== lowResourceMode) scheduleMediaDisplay();
   syncThemeControls(settings.theme || currentTheme);
   lyricsMode = settings.lyricsMode || (settings.lyricsDirectEnabled ? 'auto' : 'online');
   for (const input of mediaElements.modeInputs) input.checked = input.value === lyricsMode;
@@ -893,7 +894,18 @@ const savedWeatherCity = hasMojibake(storedWeatherCity) ? '北京' : storedWeath
 weatherElements.city.value = savedWeatherCity;
 loadWeather(savedWeatherCity);
 setInterval(() => loadWeather(weatherElements.city.value), 15 * 60 * 1000);
-setInterval(updateMediaDisplay, 500);
+
+let mediaDisplayTimer;
+function scheduleMediaDisplay() {
+  clearTimeout(mediaDisplayTimer);
+  if (document.hidden) return;
+  mediaDisplayTimer = setTimeout(() => {
+    updateMediaDisplay();
+    scheduleMediaDisplay();
+  }, lowResourceMode ? 1000 : 500);
+}
+document.addEventListener('visibilitychange', scheduleMediaDisplay);
+scheduleMediaDisplay();
 
 const savedGameMode = localStorage.getItem('gameMode') === 'true';
 overlayControls.gameMode.checked = savedGameMode;

@@ -186,15 +186,24 @@ button {
 .game-mode .overlay-bar {
   background: var(--overlay-bg);
   box-shadow: none;
-  backdrop-filter: blur(min(var(--overlay-blur), 6px));
+  backdrop-filter: none;
 }
 
 .game-mode .heart {
   filter: none;
 }
 
+.game-mode .heart.active {
+  animation: none;
+}
+
 .game-mode .overlay-controls {
   transition: none;
+}
+
+.game-mode.zone-danger .overlay-bar {
+  animation: none;
+  box-shadow: 0 0 18px rgba(255, 35, 35, 0.38);
 }
 
 body.zone-low .overlay-bar {

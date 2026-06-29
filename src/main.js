@@ -773,6 +773,7 @@ function createWindow() {
   mainWindow.on('show', () => {
     mainWindow.webContents.send('media-state', overlayState.media);
     sendOverlaySettings();
+    gameService?.emit();
   });
 }
 
@@ -781,7 +782,7 @@ app.whenReady().then(async () => {
   gameService = new GameService({
     userDataPath: app.getPath('userData'),
     onState: (state) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
         mainWindow.webContents.send('game-state', state);
       }
     },
