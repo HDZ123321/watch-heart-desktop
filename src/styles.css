@@ -56,6 +56,12 @@ button:disabled {
   margin-bottom: 24px;
 }
 
+.topbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
 .game-toolbar {
   display: flex;
   min-height: 64px;

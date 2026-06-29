@@ -4,6 +4,7 @@ const MAX_POINTS = 120;
 
 const elements = {
   alwaysOnTop: document.querySelector('#always-on-top'),
+  autoStart: document.querySelector('#auto-start'),
   statusDot: document.querySelector('#status-dot'),
   statusText: document.querySelector('#status-text'),
   deviceName: document.querySelector('#device-name'),
@@ -270,6 +271,20 @@ function disconnect() {
     connected: false,
     zone: '等待心率'
   });
+}
+
+async function reconnectFromTray() {
+  intentionalDisconnect = false;
+  clearTimeout(reconnectTimer);
+  if (bluetoothDevice) {
+    if (bluetoothDevice.gatt?.connected && heartRateCharacteristic) {
+      setStatus('connected', '已连接');
+      return;
+    }
+    await connectGatt();
+    return;
+  }
+  await requestAndConnect();
 }
 
 const weatherCodes = {
@@ -540,6 +555,9 @@ elements.cancelScan.addEventListener('click', () => {
 elements.alwaysOnTop.addEventListener('change', (event) => {
   window.desktop.setAlwaysOnTop(event.target.checked);
 });
+elements.autoStart.addEventListener('change', (event) => {
+  window.desktop.setAutoStart(event.target.checked);
+});
 overlayControls.visible.addEventListener('change', (event) => {
   window.desktop.setOverlayVisible(event.target.checked);
 });
@@ -600,6 +618,10 @@ mediaElements.sodaAutoHide.addEventListener('change', (event) => {
 });
 
 window.desktop.onBluetoothDevices(renderDeviceList);
+window.desktop.onAppSettings((settings) => {
+  elements.autoStart.checked = settings.autoStart;
+});
+window.desktop.onTrayHeartRateReconnect(reconnectFromTray);
 window.desktop.onOverlaySettings((settings) => {
   const wasLowResourceMode = lowResourceMode;
   lowResourceMode = settings.gameMode;

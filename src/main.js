@@ -3,8 +3,11 @@ const {
   BrowserWindow,
   globalShortcut,
   ipcMain,
+  Menu,
+  nativeImage,
   screen,
-  session
+  session,
+  Tray
 } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -28,8 +31,15 @@ const {
 } = require('./media-service');
 const { SodaLyricsDirectService } = require('./soda-lyrics-service');
 
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) app.quit();
+app.on('second-instance', () => {
+  if (app.isReady()) showMainWindow();
+});
+
 let mainWindow;
 let overlayWindow;
+let tray;
 let bluetoothSelectionCallback;
 let discoveredDevices = new Map();
 let isQuitting = false;
@@ -44,6 +54,7 @@ let lyricsDirectEnabled = false;
 let automaticMediaState = null;
 let manualLyricsOverride = null;
 let sodaLyricsDirect;
+let initialLaunchHidden = process.argv.includes('--hidden');
 const OVERLAY_MIN_SCALE = 0.5;
 const OVERLAY_MAX_SCALE = 2;
 const OVERLAY_MIN_WIDTH = 360;
@@ -107,6 +118,95 @@ function isMainSender(event) {
 
 function isOverlaySender(event) {
   return Boolean(overlayWindow && event.sender === overlayWindow.webContents);
+}
+
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function isAutoStartEnabled() {
+  if (!app.isPackaged) return false;
+  return app.getLoginItemSettings({
+    path: process.execPath,
+    args: ['--hidden']
+  }).openAtLogin;
+}
+
+function sendAppSettings() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('app-settings', {
+    autoStart: isAutoStartEnabled(),
+    trayAvailable: Boolean(tray)
+  });
+}
+
+function setAutoStart(enabled) {
+  if (app.isPackaged) {
+    app.setLoginItemSettings({
+      openAtLogin: Boolean(enabled),
+      path: process.execPath,
+      args: ['--hidden']
+    });
+  }
+  sendAppSettings();
+  rebuildTrayMenu();
+}
+
+function requestHeartRateReconnect() {
+  showMainWindow();
+  mainWindow.webContents.send('tray-heart-rate-reconnect');
+}
+
+function rebuildTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    {
+      label: '打开 Watch Heart',
+      click: showMainWindow
+    },
+    {
+      label: overlayWindow?.isVisible() ? '隐藏游戏悬浮条' : '显示游戏悬浮条',
+      click: () => setOverlayVisible(!overlayWindow?.isVisible())
+    },
+    {
+      label: '重连心率',
+      click: requestHeartRateReconnect
+    },
+    { type: 'separator' },
+    {
+      label: '开机启动',
+      type: 'checkbox',
+      checked: isAutoStartEnabled(),
+      click: (item) => setAutoStart(item.checked)
+    },
+    { type: 'separator' },
+    {
+      label: '退出',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]));
+}
+
+async function createTray() {
+  if (tray && !tray.isDestroyed()) return tray;
+  let icon;
+  try {
+    icon = await app.getFileIcon(process.execPath, { size: 'small' });
+  } catch {
+    icon = nativeImage.createFromPath(process.execPath);
+  }
+  tray = new Tray(icon.resize({ width: 16, height: 16 }));
+  tray.setToolTip('Watch Heart');
+  tray.on('click', showMainWindow);
+  tray.on('double-click', showMainWindow);
+  rebuildTrayMenu();
+  return tray;
 }
 
 function sendDeviceList() {
@@ -192,6 +292,7 @@ function sendOverlaySettings() {
   if (overlayWindow && !overlayWindow.isDestroyed()) {
     overlayWindow.webContents.send('overlay-settings', settings);
   }
+  rebuildTrayMenu();
 }
 
 function publishSodaLyric(lyric) {
@@ -328,6 +429,8 @@ function resizeOverlayWindow(window) {
 }
 
 function createWindow() {
+  const showOnCreate = !initialLaunchHidden;
+  initialLaunchHidden = false;
   mainWindow = new BrowserWindow({
     width: 980,
     height: 700,
@@ -335,6 +438,7 @@ function createWindow() {
     minHeight: 560,
     backgroundColor: '#090b10',
     title: 'Watch Heart',
+    show: showOnCreate,
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -360,7 +464,7 @@ function createWindow() {
   );
 
   mainWindow.on('close', (event) => {
-    if (!isQuitting && overlayWindow?.isVisible()) {
+    if (!isQuitting) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -369,7 +473,6 @@ function createWindow() {
   mainWindow.on('closed', () => {
     finishBluetoothSelection();
     mainWindow = undefined;
-    if (!overlayWindow?.isVisible()) app.quit();
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
@@ -377,6 +480,7 @@ function createWindow() {
     mainWindow.webContents.send('media-state', overlayState.media);
     publishSodaDirectStatus(sodaLyricsDirect?.lastStatus || '未开启');
     sendOverlaySettings();
+    sendAppSettings();
   });
   mainWindow.on('show', () => {
     mainWindow.webContents.send('media-state', overlayState.media);
@@ -384,7 +488,7 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   loadOverlaySettings();
 
   session.defaultSession.setPermissionRequestHandler(
@@ -419,6 +523,11 @@ app.whenReady().then(() => {
   ipcMain.on('set-always-on-top', (event, enabled) => {
     if (!isMainSender(event)) return;
     mainWindow?.setAlwaysOnTop(Boolean(enabled));
+  });
+
+  ipcMain.on('set-auto-start', (event, enabled) => {
+    if (!isMainSender(event)) return;
+    setAutoStart(Boolean(enabled));
   });
 
   ipcMain.on('overlay-toggle', (event, visible) => {
@@ -584,6 +693,7 @@ app.whenReady().then(() => {
   });
   sodaLyricsDirect.setGameMode(gameMode);
 
+  await createTray();
   createWindow();
   createOverlayWindow();
   startMediaMonitor((media) => {
@@ -609,16 +719,18 @@ app.whenReady().then(() => {
   sendOverlaySettings();
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    showMainWindow();
   });
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  // Keep running in the notification area until the tray Exit command is used.
 });
 
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
+  tray?.destroy();
+  tray = undefined;
 });
 
 app.on('before-quit', () => {

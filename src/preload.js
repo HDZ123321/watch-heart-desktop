@@ -13,6 +13,15 @@ contextBridge.exposeInMainWorld('desktop', {
   setAlwaysOnTop: (enabled) => {
     ipcRenderer.send('set-always-on-top', enabled);
   },
+  setAutoStart: (enabled) => {
+    ipcRenderer.send('set-auto-start', enabled);
+  },
+  onAppSettings: (handler) => {
+    ipcRenderer.on('app-settings', (_event, settings) => handler(settings));
+  },
+  onTrayHeartRateReconnect: (handler) => {
+    ipcRenderer.on('tray-heart-rate-reconnect', () => handler());
+  },
   setOverlayVisible: (visible) => {
     ipcRenderer.send('overlay-toggle', visible);
   },
