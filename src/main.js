@@ -224,6 +224,23 @@ function readableUpdateError(error) {
   return `更新检查失败：${message.slice(0, 90)}`;
 }
 
+function looksMojibake(text) {
+  return /�|锟|�/.test(text) || (text.match(/�/g) || []).length >= 2;
+}
+
+async function readChinaResponseText(response) {
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const contentType = response.headers.get('content-type') || '';
+  const charset = contentType.match(/charset=([^;]+)/i)?.[1]?.trim().toLowerCase();
+  const utf8 = new TextDecoder('utf-8').decode(buffer);
+  if (charset && /gbk|gb2312|gb18030/i.test(charset)) {
+    return new TextDecoder('gb18030').decode(buffer);
+  }
+  return looksMojibake(utf8)
+    ? new TextDecoder('gb18030').decode(buffer)
+    : utf8;
+}
+
 function weatherIconFor(label) {
   if (/雷/.test(label)) return 'ϟ';
   if (/雪|冰/.test(label)) return '❄';
@@ -254,7 +271,7 @@ async function fetchChinaWeather(city) {
     signal: AbortSignal.timeout(10000)
   });
   if (!response.ok) throw new Error('国内天气接口暂时不可用');
-  const result = await response.json();
+  const result = JSON.parse(await readChinaResponseText(response));
   const today = Array.isArray(result?.data) ? result.data[0] : null;
   if (!today) throw new Error('未找到该城市天气');
   const label = String(today.tianqi || '天气未知').slice(0, 40);
@@ -280,7 +297,7 @@ async function locateChinaCityByIp() {
     signal: AbortSignal.timeout(8000)
   });
   if (!response.ok) throw new Error('IP 定位失败');
-  const text = await response.text();
+  const text = await readChinaResponseText(response);
   const jsonText = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
   const data = JSON.parse(jsonText);
   const city = String(data.city || data.pro || '').replace(/市$/, '').trim();

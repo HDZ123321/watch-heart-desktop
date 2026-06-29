@@ -168,6 +168,10 @@ function renderUpdateStatus(status) {
   elements.installUpdate.classList.toggle('hidden', status?.state !== 'downloaded');
 }
 
+function hasMojibake(text) {
+  return /�|锟|\?\?\?/.test(String(text || '')); 
+}
+
 function readThemeControls() {
   return {
     preset: themeControls.preset.value,
@@ -803,7 +807,9 @@ window.addEventListener('resize', drawChart);
 syncHeartZoneControls();
 drawChart();
 
-const savedWeatherCity = localStorage.getItem('weatherCity') || '香港';
+const storedWeatherCity = localStorage.getItem('weatherCity') || '香港';
+if (hasMojibake(storedWeatherCity)) localStorage.removeItem('weatherCity');
+const savedWeatherCity = hasMojibake(storedWeatherCity) ? '北京' : storedWeatherCity;
 weatherElements.city.value = savedWeatherCity;
 loadWeather(savedWeatherCity);
 setInterval(() => loadWeather(weatherElements.city.value), 15 * 60 * 1000);
