@@ -31,6 +31,7 @@ class SodaLyricsDirectService {
     this.enabled = next;
     this.clearLyric();
     if (!next) {
+      this.stopServer();
       this.setStatus('未开启');
       return;
     }
@@ -73,9 +74,13 @@ class SodaLyricsDirectService {
 
   stop() {
     this.enabled = false;
+    this.stopServer();
+    this.clearLyric();
+  }
+
+  stopServer() {
     clearInterval(this.staleTimer);
     this.staleTimer = undefined;
-    this.clearLyric();
     this.server?.close();
     this.server = undefined;
   }

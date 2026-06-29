@@ -5,6 +5,8 @@ const {
 } = require('windows-media-sessions');
 
 const lyricsCache = new Map();
+const MAX_CACHE_ENTRIES = 12;
+const MAX_LYRIC_LINES = 1200;
 let unsubscribe;
 let activeTrackKey = '';
 let activeLyrics = [];
@@ -50,7 +52,7 @@ function parseSyncedLyrics(source) {
   if (typeof source !== 'string' || source.length > 500_000) return [];
 
   const rawEntries = [];
-  for (const rawLine of source.split(/\r?\n/).slice(0, 3000)) {
+  for (const rawLine of source.split(/\r?\n/).slice(0, 2500)) {
     const timestamps = [...rawLine.matchAll(/\[(\d{1,3}):(\d{2}(?:\.\d{1,3})?)\]/g)];
     if (!timestamps.length) continue;
     const text = rawLine.replace(/\[[^\]]+\]/g, '').trim();
@@ -63,9 +65,6 @@ function parseSyncedLyrics(source) {
   }
 
   rawEntries.sort((left, right) => left.timeMs - right.timeMs);
-
-  // Multiple texts at the same timestamp are usually original/translation pairs.
-  // Keep the first language instead of displaying both at once.
   const uniqueEntries = [];
   for (const entry of rawEntries) {
     if (uniqueEntries.at(-1)?.timeMs === entry.timeMs) continue;
@@ -83,6 +82,7 @@ function parseSyncedLyrics(source) {
         : 3000;
     const segmentDuration = Math.max(650, availableMs / segments.length);
     segments.forEach((text, segmentIndex) => {
+      if (expanded.length >= MAX_LYRIC_LINES) return;
       expanded.push({
         timeMs: Math.round(entry.timeMs + segmentDuration * segmentIndex),
         text
@@ -90,7 +90,7 @@ function parseSyncedLyrics(source) {
     });
   });
 
-  return expanded.slice(0, 2000);
+  return expanded.slice(0, MAX_LYRIC_LINES);
 }
 
 async function fetchJson(url) {
@@ -123,10 +123,7 @@ function normalizeComparable(value) {
 }
 
 function metadataCandidates(track) {
-  const candidates = [{
-    title: track.title,
-    artist: track.artist
-  }];
+  const candidates = [{ title: track.title, artist: track.artist }];
   const parts = track.title.split(/\s+[-–—]\s+/).map((part) => part.trim());
   if (!track.artist && parts.length === 2 && parts.every(Boolean)) {
     candidates.push(
@@ -151,19 +148,13 @@ function scoreLyricsMatch(track, candidate) {
   let best = 0;
   for (const expected of metadataCandidates(track)) {
     let score = textScore(expected.title, candidate.trackName, 70, 38);
-    if (expected.artist) {
-      score += textScore(expected.artist, candidate.artistName, 30, 16);
-    }
+    if (expected.artist) score += textScore(expected.artist, candidate.artistName, 30, 16);
     best = Math.max(best, score);
   }
 
   const targetDuration = track.durationMs / 1000;
   const candidateDuration = Number(candidate.duration);
-  if (
-    targetDuration > 0 &&
-    targetDuration < 20 * 60 &&
-    Number.isFinite(candidateDuration)
-  ) {
+  if (targetDuration > 0 && targetDuration < 20 * 60 && Number.isFinite(candidateDuration)) {
     const difference = Math.abs(targetDuration - candidateDuration);
     if (difference <= 2) best += 25;
     else if (difference <= 5) best += 16;
@@ -173,10 +164,26 @@ function scoreLyricsMatch(track, candidate) {
   return best;
 }
 
+function readCachedLyrics(key) {
+  if (!lyricsCache.has(key)) return null;
+  const value = lyricsCache.get(key);
+  lyricsCache.delete(key);
+  lyricsCache.set(key, value);
+  return value;
+}
+
+function cacheLyrics(key, lyrics) {
+  lyricsCache.delete(key);
+  lyricsCache.set(key, lyrics);
+  while (lyricsCache.size > MAX_CACHE_ENTRIES) {
+    lyricsCache.delete(lyricsCache.keys().next().value);
+  }
+}
+
 async function findLyrics(track) {
-  const cacheKey =
-    `${normalizeComparable(track.artist)}\u0000${normalizeComparable(track.title)}`;
-  if (lyricsCache.has(cacheKey)) return lyricsCache.get(cacheKey);
+  const cacheKey = `${normalizeComparable(track.artist)}\u0000${normalizeComparable(track.title)}`;
+  const cached = readCachedLyrics(cacheKey);
+  if (cached) return cached;
 
   const primary = metadataCandidates(track)[0];
   const searchUrl = new URL('https://lrclib.net/api/search');
@@ -206,17 +213,13 @@ async function findLyrics(track) {
     : null;
 
   const lyrics = parseSyncedLyrics(result?.syncedLyrics);
-  if (lyricsCache.size >= 50) lyricsCache.delete(lyricsCache.keys().next().value);
-  lyricsCache.set(cacheKey, lyrics);
+  cacheLyrics(cacheKey, lyrics);
   return lyrics;
 }
 
 function hasUsableMetadata(track) {
   if (!track.title || track.title.length < 2) return false;
-  if (
-    !track.artist &&
-    /(抖音|记录美好生活|douyin|youtube|正在播放|unknown)/i.test(track.title)
-  ) {
+  if (!track.artist && /(抖音|记录美好生活|douyin|youtube|正在播放|unknown)/i.test(track.title)) {
     return false;
   }
   return true;
@@ -283,9 +286,7 @@ async function processSessions(sessions, onUpdate) {
   }
 
   onUpdate(track);
-
-  if (!onlineLyricsEnabled) return;
-  if (!changedTrack) return;
+  if (!onlineLyricsEnabled || !changedTrack) return;
   const generation = ++requestGeneration;
 
   try {
@@ -297,8 +298,7 @@ async function processSessions(sessions, onUpdate) {
         ...track,
         lyrics: activeLyrics,
         lyricsStatus,
-        positionMs:
-          track.positionMs + (track.playing ? now - track.capturedAt : 0),
+        positionMs: track.positionMs + (track.playing ? now - track.capturedAt : 0),
         capturedAt: now
       });
     }
@@ -326,11 +326,16 @@ function setOnlineLyricsEnabled(enabled) {
   activeLyrics = [];
   lyricsStatus = next ? 'idle' : 'disabled';
   requestGeneration += 1;
+  if (!next) lyricsCache.clear();
 }
 
 async function stopMediaMonitor() {
   unsubscribe?.();
   unsubscribe = undefined;
+  activeTrackKey = '';
+  activeLyrics = [];
+  lyricsCache.clear();
+  requestGeneration += 1;
   await shutdown().catch(() => {});
 }
 

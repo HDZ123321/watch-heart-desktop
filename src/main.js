@@ -51,6 +51,7 @@ let overlayWidth = 580;
 let overlayPassthrough = false;
 let overlayPosition;
 let settingsSaveTimer;
+let overlayDestroyTimer;
 let unlockShortcuts = [];
 let overlayTheme = createDefaultOverlayTheme();
 let gameMode = false;
@@ -570,6 +571,7 @@ function publishSodaDirectStatus(status) {
 }
 
 function createOverlayWindow() {
+  clearTimeout(overlayDestroyTimer);
   if (overlayWindow && !overlayWindow.isDestroyed()) return overlayWindow;
 
   overlayWindow = new BrowserWindow({
@@ -619,12 +621,19 @@ function createOverlayWindow() {
 }
 
 function setOverlayVisible(visible) {
-  const window = createOverlayWindow();
   if (visible) {
+    clearTimeout(overlayDestroyTimer);
+    const window = createOverlayWindow();
     window.showInactive();
   } else {
     setOverlayPassthrough(false);
-    window.hide();
+    if (overlayWindow && !overlayWindow.isDestroyed()) overlayWindow.hide();
+    clearTimeout(overlayDestroyTimer);
+    overlayDestroyTimer = setTimeout(() => {
+      if (overlayWindow && !overlayWindow.isDestroyed() && !overlayWindow.isVisible()) {
+        overlayWindow.destroy();
+      }
+    }, 60000);
   }
   sendOverlaySettings();
 }
@@ -1007,7 +1016,6 @@ app.whenReady().then(async () => {
 
   await createTray();
   createWindow();
-  createOverlayWindow();
   if (!gameService.data.defaultProfile) {
     gameService.data.defaultProfile = overlayProfile();
     gameService.save();
@@ -1055,6 +1063,7 @@ app.on('will-quit', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   clearTimeout(settingsSaveTimer);
+  clearTimeout(overlayDestroyTimer);
   gameService?.stop();
   sodaLyricsDirect?.stop();
   stopMediaMonitor();
