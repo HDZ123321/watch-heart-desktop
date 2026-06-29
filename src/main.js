@@ -213,6 +213,85 @@ function sendUpdateStatus(status) {
   });
 }
 
+function readableUpdateError(error) {
+  const message = String(error?.message || error || '');
+  if (/latest\.ya?ml|404|Cannot find/i.test(message)) {
+    return '暂未发布可自动更新的安装包，请先在 GitHub Release 上传 latest.yml 和 Setup.exe';
+  }
+  if (/net::|ENOTFOUND|ECONN|timeout|TLS|SSL/i.test(message)) {
+    return '网络连接失败，稍后再检查更新';
+  }
+  return `更新检查失败：${message.slice(0, 90)}`;
+}
+
+function weatherIconFor(label) {
+  if (/雷/.test(label)) return 'ϟ';
+  if (/雪|冰/.test(label)) return '❄';
+  if (/雨/.test(label)) return '🌧';
+  if (/云/.test(label)) return '◒';
+  if (/阴/.test(label)) return '☁';
+  if (/晴/.test(label)) return '☀';
+  return '◌';
+}
+
+function parseTemperatureRange(value) {
+  const numbers = String(value || '').match(/-?\d+(?:\.\d+)?/g)?.map(Number) || [];
+  if (!numbers.length) return { temperature: 0, text: '--°' };
+  const average = numbers.reduce((sum, item) => sum + item, 0) / numbers.length;
+  return {
+    temperature: average,
+    text: numbers.length >= 2 ? `${numbers[0]}~${numbers[1]}°` : `${numbers[0]}°`
+  };
+}
+
+async function fetchChinaWeather(city) {
+  const safeCity = String(city || '').trim().replace(/市$/, '').slice(0, 40);
+  if (!safeCity) throw new Error('请输入城市名');
+  const url = new URL('https://v.api.aa1.cn/api/api-tianqi-3/index.php');
+  url.search = new URLSearchParams({ msg: safeCity, type: '1' });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json,text/plain,*/*' },
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!response.ok) throw new Error('国内天气接口暂时不可用');
+  const result = await response.json();
+  const today = Array.isArray(result?.data) ? result.data[0] : null;
+  if (!today) throw new Error('未找到该城市天气');
+  const label = String(today.tianqi || '天气未知').slice(0, 40);
+  const { temperature, text } = parseTemperatureRange(today.wendu);
+  const windSpeed = Number(String(today.fengdu || '').match(/\d+/)?.[0] || 0);
+  return {
+    city: safeCity,
+    region: '中国大陆天气源',
+    temperature,
+    temperatureText: text,
+    apparentTemperature: temperature,
+    windSpeed,
+    windText: String(today.fengdu || '').slice(0, 40),
+    label,
+    icon: weatherIconFor(label),
+    airQuality: String(today.pm || '').slice(0, 20)
+  };
+}
+
+async function locateChinaCityByIp() {
+  const response = await fetch('https://whois.pconline.com.cn/ipJson.jsp?json=true', {
+    headers: { Accept: 'application/json,text/plain,*/*' },
+    signal: AbortSignal.timeout(8000)
+  });
+  if (!response.ok) throw new Error('IP 定位失败');
+  const text = await response.text();
+  const jsonText = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1);
+  const data = JSON.parse(jsonText);
+  const city = String(data.city || data.pro || '').replace(/市$/, '').trim();
+  if (!city) throw new Error('未能识别当前位置城市');
+  return {
+    city,
+    region: String(data.pro || '').trim(),
+    displayName: String(data.addr || '').trim()
+  };
+}
+
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -246,7 +325,7 @@ function setupAutoUpdater() {
   autoUpdater.on('error', (error) => {
     sendUpdateStatus({
       state: 'error',
-      message: `更新检查失败：${error.message || error}`
+      message: readableUpdateError(error)
     });
   });
   updaterReady = true;
@@ -265,7 +344,7 @@ function checkForUpdates(manual = false) {
   autoUpdater.checkForUpdates().catch((error) => {
     sendUpdateStatus({
       state: 'error',
-      message: `更新检查失败：${error.message || error}`
+      message: readableUpdateError(error)
     });
   });
 }
@@ -788,48 +867,14 @@ app.whenReady().then(async () => {
     sendOverlayState();
   });
 
-  ipcMain.handle('reverse-geocode', async (event, coordinates) => {
+  ipcMain.handle('china-weather', async (event, city) => {
     if (!isMainSender(event)) throw new Error('Unauthorized sender');
-    const latitude = Number(coordinates?.latitude);
-    const longitude = Number(coordinates?.longitude);
-    if (
-      !Number.isFinite(latitude) ||
-      !Number.isFinite(longitude) ||
-      Math.abs(latitude) > 90 ||
-      Math.abs(longitude) > 180
-    ) {
-      throw new Error('Invalid coordinates');
-    }
+    return fetchChinaWeather(city);
+  });
 
-    const url = new URL('https://nominatim.openstreetmap.org/reverse');
-    url.search = new URLSearchParams({
-      format: 'jsonv2',
-      lat: String(latitude),
-      lon: String(longitude),
-      zoom: '10',
-      addressdetails: '1',
-      'accept-language': 'zh-CN'
-    });
-    const response = await fetch(url, {
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'WatchHeart/1.2.0'
-      },
-      signal: AbortSignal.timeout(8000)
-    });
-    if (!response.ok) throw new Error('Address lookup failed');
-    const result = await response.json();
-    const address = result.address || {};
-    return {
-      city:
-        address.city ||
-        address.town ||
-        address.village ||
-        address.county ||
-        '当前位置',
-      region: address.state || address.country || '',
-      displayName: String(result.display_name || '').slice(0, 300)
-    };
+  ipcMain.handle('china-ip-location', async (event) => {
+    if (!isMainSender(event)) throw new Error('Unauthorized sender');
+    return locateChinaCityByIp();
   });
 
   ipcMain.handle('lyrics-search', async (event, query) => {

@@ -482,71 +482,21 @@ async function reconnectFromTray() {
   await requestAndConnect();
 }
 
-const weatherCodes = {
-  0: ['晴朗', '☀'],
-  1: ['大致晴朗', '☀'],
-  2: ['多云', '◒'],
-  3: ['阴天', '☁'],
-  45: ['有雾', '≋'],
-  48: ['雾凇', '≋'],
-  51: ['轻微细雨', '🌦'],
-  53: ['细雨', '🌦'],
-  55: ['较强细雨', '🌧'],
-  56: ['冻雨', '🌧'],
-  57: ['冻雨', '🌧'],
-  61: ['小雨', '🌦'],
-  63: ['中雨', '🌧'],
-  65: ['大雨', '🌧'],
-  66: ['冻雨', '🌧'],
-  67: ['强冻雨', '🌧'],
-  71: ['小雪', '❄'],
-  73: ['中雪', '❄'],
-  75: ['大雪', '❄'],
-  77: ['雪粒', '❄'],
-  80: ['阵雨', '🌦'],
-  81: ['较强阵雨', '🌧'],
-  82: ['强阵雨', '🌧'],
-  85: ['阵雪', '❄'],
-  86: ['强阵雪', '❄'],
-  95: ['雷暴', 'ϟ'],
-  96: ['雷暴冰雹', 'ϟ'],
-  99: ['强雷暴冰雹', 'ϟ']
-};
-
-async function loadWeatherCoordinates(latitude, longitude, location, persist) {
-  const forecastUrl = new URL('https://api.open-meteo.com/v1/forecast');
-  forecastUrl.search = new URLSearchParams({
-    latitude: String(latitude),
-    longitude: String(longitude),
-    current:
-      'temperature_2m,apparent_temperature,weather_code,wind_speed_10m',
-    timezone: 'auto'
-  });
-  const forecastResponse = await fetch(forecastUrl);
-  if (!forecastResponse.ok) throw new Error('天气查询失败');
-  const forecast = await forecastResponse.json();
-  const current = forecast.current;
-  const [label, icon] = weatherCodes[current.weather_code] || ['天气未知', '◌'];
-  const weather = {
-    city: location.city,
-    temperature: current.temperature_2m,
-    apparentTemperature: current.apparent_temperature,
-    windSpeed: current.wind_speed_10m,
-    label,
-    icon
-  };
-
-  weatherElements.city.value = location.city;
-  weatherElements.icon.textContent = icon;
-  weatherElements.temperature.textContent = `${Math.round(weather.temperature)}°`;
-  weatherElements.description.textContent = label;
+function renderWeather(weather, persist) {
+  weatherElements.city.value = weather.city;
+  weatherElements.icon.textContent = weather.icon || '◌';
+  weatherElements.temperature.textContent =
+    weather.temperatureText || `${Math.round(weather.temperature)}°`;
+  weatherElements.description.textContent =
+    weather.airQuality ? `${weather.label} · 空气${weather.airQuality}` : weather.label;
   weatherElements.feelsLike.textContent =
-    `${Math.round(weather.apparentTemperature)}°`;
-  weatherElements.wind.textContent = `${Math.round(weather.windSpeed)} km/h`;
+    weather.temperatureText || `${Math.round(weather.apparentTemperature)}°`;
+  weatherElements.wind.textContent =
+    weather.windText || `${Math.round(weather.windSpeed)} km/h`;
   weatherElements.location.textContent =
-    [location.city, location.region].filter(Boolean).join(' · ');
-  weatherElements.location.title = location.displayName || '';
-  if (persist) localStorage.setItem('weatherCity', location.city);
+    [weather.city, weather.region || '中国大陆天气源'].filter(Boolean).join(' · ');
+  weatherElements.location.title = '天气来源：国内公共天气接口';
+  if (persist) localStorage.setItem('weatherCity', weather.city);
   window.desktop.updateWeather(weather);
 }
 
@@ -557,28 +507,7 @@ async function loadWeather(city, persist = false) {
   weatherElements.description.textContent = '正在更新…';
 
   try {
-    const geocodeUrl = new URL('https://geocoding-api.open-meteo.com/v1/search');
-    geocodeUrl.search = new URLSearchParams({
-      name: trimmedCity,
-      count: '1',
-      language: 'zh',
-      format: 'json'
-    });
-    const geocodeResponse = await fetch(geocodeUrl);
-    if (!geocodeResponse.ok) throw new Error('城市查询失败');
-    const geocode = await geocodeResponse.json();
-    const location = geocode.results?.[0];
-    if (!location) throw new Error('未找到该城市');
-    await loadWeatherCoordinates(
-      location.latitude,
-      location.longitude,
-      {
-        city: location.name,
-        region: location.admin1 || location.country || '',
-        displayName: ''
-      },
-      persist
-    );
+    renderWeather(await window.desktop.getChinaWeather(trimmedCity), persist);
   } catch (error) {
     weatherElements.description.textContent = error.message;
     console.error('Weather update failed:', error);
@@ -586,37 +515,15 @@ async function loadWeather(city, persist = false) {
 }
 
 async function locateWeather() {
-  if (!navigator.geolocation) {
-    weatherElements.description.textContent = '系统不支持定位';
-    return;
-  }
-
   weatherElements.locate.disabled = true;
-  weatherElements.description.textContent = '正在获取位置…';
+  weatherElements.description.textContent = '正在通过 IP 定位城市…';
 
   try {
-    const position = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 12000,
-        maximumAge: 10 * 60 * 1000
-      });
-    });
-    const coordinates = {
-      latitude: position.coords.latitude,
-      longitude: position.coords.longitude
-    };
-    const address = await window.desktop.locateAddress(coordinates);
-    await loadWeatherCoordinates(
-      coordinates.latitude,
-      coordinates.longitude,
-      address,
-      true
-    );
+    const location = await window.desktop.locateChinaCity();
+    await loadWeather(location.city, true);
+    weatherElements.location.title = location.displayName || location.region || '';
   } catch (error) {
-    const denied = error?.code === 1;
-    weatherElements.description.textContent =
-      denied ? '定位权限未开启' : '自动定位失败';
+    weatherElements.description.textContent = '自动定位失败';
     console.error('Location lookup failed:', error);
   } finally {
     weatherElements.locate.disabled = false;

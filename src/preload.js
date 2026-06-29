@@ -55,8 +55,11 @@ contextBridge.exposeInMainWorld('desktop', {
   onOverlaySettings: (handler) => {
     ipcRenderer.on('overlay-settings', (_event, settings) => handler(settings));
   },
-  locateAddress: (coordinates) => {
-    return ipcRenderer.invoke('reverse-geocode', coordinates);
+  getChinaWeather: (city) => {
+    return ipcRenderer.invoke('china-weather', city);
+  },
+  locateChinaCity: () => {
+    return ipcRenderer.invoke('china-ip-location');
   },
   onMediaState: (handler) => {
     ipcRenderer.on('media-state', (_event, media) => handler(media));
