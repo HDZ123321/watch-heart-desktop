@@ -12,6 +12,38 @@ let passthroughEnabled = false;
 let controlsInteractive = false;
 let displayedLyric = '';
 let sodaDirectEnabled = false;
+let lyricsMode = 'auto';
+const DEFAULT_THEME = {
+  accent: '#ff315d',
+  background: '#0a0c12',
+  text: '#f7f8fb',
+  lyric: '#e8eaf0',
+  opacity: 88,
+  blur: 16,
+  radius: 18,
+  fontScale: 100
+};
+
+function hexToRgb(hex) {
+  const match = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!match) return [10, 12, 18];
+  const value = Number.parseInt(match[1], 16);
+  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function applyTheme(theme = {}) {
+  const merged = { ...DEFAULT_THEME, ...theme };
+  const [r, g, b] = hexToRgb(merged.background);
+  const alpha = Math.min(1, Math.max(0.35, Number(merged.opacity) / 100));
+  const root = document.documentElement.style;
+  root.setProperty('--overlay-accent', merged.accent);
+  root.setProperty('--overlay-bg', `rgba(${r}, ${g}, ${b}, ${alpha})`);
+  root.setProperty('--overlay-text', merged.text);
+  root.setProperty('--overlay-lyric', merged.lyric);
+  root.setProperty('--overlay-blur', `${Number(merged.blur) || 0}px`);
+  root.setProperty('--overlay-radius', `${Number(merged.radius) || 18}px`);
+  root.setProperty('--overlay-font-scale', `${Number(merged.fontScale) || 100}%`);
+}
 
 function mediaPosition(media) {
   if (!media) return 0;
@@ -51,6 +83,10 @@ function updateLyrics() {
         ? '♪'
         : mediaState.lyricsStatus === 'loading'
           ? '正在匹配歌词…'
+          : mediaState.lyricsStatus === 'disabled'
+            ? lyricsMode === 'soda'
+              ? '等待汽水音乐直读歌词'
+              : '在线歌词未启用'
           : mediaState.lyricsStatus === 'metadata-missing'
             ? '播放器未提供歌曲信息'
             : '未找到同步歌词');
@@ -95,7 +131,9 @@ window.overlay.onSettings((settings) => {
     ? '取消鼠标穿透'
     : '开启鼠标穿透';
   document.body.classList.toggle('game-mode', settings.gameMode);
-  sodaDirectEnabled = settings.lyricsDirectEnabled;
+  applyTheme(settings.theme);
+  lyricsMode = settings.lyricsMode || (settings.lyricsDirectEnabled ? 'auto' : 'online');
+  sodaDirectEnabled = lyricsMode !== 'online';
   updateLyrics();
 });
 

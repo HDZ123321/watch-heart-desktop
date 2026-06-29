@@ -26,6 +26,7 @@ if (app.isPackaged) {
 
 const {
   searchSyncedLyrics,
+  setOnlineLyricsEnabled,
   startMediaMonitor,
   stopMediaMonitor
 } = require('./media-service');
@@ -49,8 +50,9 @@ let overlayPassthrough = false;
 let overlayPosition;
 let settingsSaveTimer;
 let unlockShortcuts = [];
+let overlayTheme = createDefaultOverlayTheme();
 let gameMode = false;
-let lyricsDirectEnabled = false;
+let lyricsMode = 'auto';
 let automaticMediaState = null;
 let manualLyricsOverride = null;
 let sodaLyricsDirect;
@@ -60,6 +62,15 @@ const OVERLAY_MAX_SCALE = 2;
 const OVERLAY_MIN_WIDTH = 360;
 const OVERLAY_MAX_WIDTH = 1000;
 const OVERLAY_BASE_HEIGHT = 96;
+const OVERLAY_THEMES = new Set([
+  'pulse',
+  'neon',
+  'ice',
+  'amber',
+  'minimal',
+  'custom'
+]);
+const LYRICS_MODES = new Set(['auto', 'soda', 'online']);
 let overlayState = {
   bpm: null,
   zone: '等待心率',
@@ -71,6 +82,47 @@ let overlayState = {
 
 function settingsPath() {
   return path.join(app.getPath('userData'), 'overlay-settings.json');
+}
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function sanitizeHexColor(value, fallback) {
+  const text = String(value || '').trim();
+  return /^#[0-9a-f]{6}$/i.test(text) ? text : fallback;
+}
+
+function createDefaultOverlayTheme() {
+  return {
+    preset: 'pulse',
+    accent: '#ff315d',
+    background: '#0a0c12',
+    text: '#f7f8fb',
+    lyric: '#e8eaf0',
+    opacity: 88,
+    blur: 16,
+    radius: 18,
+    fontScale: 100
+  };
+}
+
+function normalizeOverlayTheme(theme) {
+  const defaults = createDefaultOverlayTheme();
+  const preset = OVERLAY_THEMES.has(theme?.preset) ? theme.preset : defaults.preset;
+  return {
+    preset,
+    accent: sanitizeHexColor(theme?.accent, defaults.accent),
+    background: sanitizeHexColor(theme?.background, defaults.background),
+    text: sanitizeHexColor(theme?.text, defaults.text),
+    lyric: sanitizeHexColor(theme?.lyric, defaults.lyric),
+    opacity: clampNumber(theme?.opacity, 35, 100, defaults.opacity),
+    blur: clampNumber(theme?.blur, 0, 28, defaults.blur),
+    radius: clampNumber(theme?.radius, 8, 30, defaults.radius),
+    fontScale: clampNumber(theme?.fontScale, 80, 130, defaults.fontScale)
+  };
 }
 
 function loadOverlaySettings() {
@@ -93,6 +145,8 @@ function loadOverlaySettings() {
       ));
       if (visible) overlayPosition = { x: saved.x, y: saved.y };
     }
+    overlayTheme = normalizeOverlayTheme(saved.theme);
+    if (LYRICS_MODES.has(saved.lyricsMode)) lyricsMode = saved.lyricsMode;
   } catch {
     // First launch or invalid settings: use safe defaults.
   }
@@ -106,7 +160,9 @@ function saveOverlaySettings() {
       scale: overlayScale,
       width: overlayWidth,
       x: bounds?.x,
-      y: bounds?.y
+      y: bounds?.y,
+      theme: overlayTheme,
+      lyricsMode
     };
     fs.writeFile(settingsPath(), JSON.stringify(data), () => {});
   }, 250);
@@ -284,7 +340,9 @@ function sendOverlaySettings() {
     width: overlayWidth,
     unlockShortcuts,
     gameMode,
-    lyricsDirectEnabled
+    lyricsMode,
+    lyricsDirectEnabled: lyricsMode !== 'online',
+    theme: overlayTheme
   };
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('overlay-settings', settings);
@@ -407,6 +465,26 @@ function setOverlayWidth(width) {
   resizeOverlayWindow(window);
   saveOverlaySettings();
   sendOverlaySettings();
+}
+
+function setOverlayTheme(theme) {
+  overlayTheme = normalizeOverlayTheme({ ...overlayTheme, ...(theme || {}) });
+  saveOverlaySettings();
+  sendOverlaySettings();
+}
+
+function setLyricsMode(mode) {
+  lyricsMode = LYRICS_MODES.has(mode) ? mode : 'auto';
+  setOnlineLyricsEnabled(lyricsMode !== 'soda');
+  sodaLyricsDirect?.setEnabled(lyricsMode !== 'online');
+  if (lyricsMode === 'online') publishSodaLyric(null);
+  saveOverlaySettings();
+  sendOverlaySettings();
+  publishSodaDirectStatus(
+    lyricsMode === 'online'
+      ? '当前仅使用在线歌词'
+      : sodaLyricsDirect?.lastStatus || '未开启'
+  );
 }
 
 function resizeOverlayWindow(window) {
@@ -545,6 +623,11 @@ app.whenReady().then(async () => {
     setOverlayWidth(width);
   });
 
+  ipcMain.on('overlay-theme', (event, theme) => {
+    if (!isMainSender(event)) return;
+    setOverlayTheme(theme);
+  });
+
   ipcMain.on('overlay-resize-step', (event, step) => {
     if (!isOverlaySender(event)) return;
     setOverlayScale(overlayScale + (Number(step) > 0 ? 0.1 : -0.1));
@@ -567,9 +650,12 @@ app.whenReady().then(async () => {
 
   ipcMain.on('soda-direct-toggle', (event, enabled) => {
     if (!isMainSender(event)) return;
-    lyricsDirectEnabled = Boolean(enabled);
-    sodaLyricsDirect?.setEnabled(lyricsDirectEnabled);
-    sendOverlaySettings();
+    setLyricsMode(Boolean(enabled) ? 'auto' : 'online');
+  });
+
+  ipcMain.on('lyrics-mode', (event, mode) => {
+    if (!isMainSender(event)) return;
+    setLyricsMode(String(mode || 'auto'));
   });
 
   ipcMain.on('soda-direct-reconnect', (event) => {
@@ -692,6 +778,8 @@ app.whenReady().then(async () => {
     onStatus: publishSodaDirectStatus
   });
   sodaLyricsDirect.setGameMode(gameMode);
+  setOnlineLyricsEnabled(lyricsMode !== 'soda');
+  sodaLyricsDirect.setEnabled(lyricsMode !== 'online');
 
   await createTray();
   createWindow();

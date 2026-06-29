@@ -31,6 +31,9 @@ contextBridge.exposeInMainWorld('desktop', {
   setOverlayWidth: (width) => {
     ipcRenderer.send('overlay-width', width);
   },
+  setOverlayTheme: (theme) => {
+    ipcRenderer.send('overlay-theme', theme);
+  },
   setOverlayPassthrough: (enabled) => {
     ipcRenderer.send('overlay-passthrough', enabled);
   },
@@ -60,6 +63,9 @@ contextBridge.exposeInMainWorld('desktop', {
   },
   setSodaDirectEnabled: (enabled) => {
     ipcRenderer.send('soda-direct-toggle', enabled);
+  },
+  setLyricsMode: (mode) => {
+    ipcRenderer.send('lyrics-mode', mode);
   },
   reconnectSodaDirect: () => {
     ipcRenderer.send('soda-direct-reconnect');

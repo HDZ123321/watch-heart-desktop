@@ -61,6 +61,32 @@
         </label>
       </section>
 
+      <section class="theme-card">
+        <div class="theme-heading">
+          <div>
+            <strong>悬浮条主题</strong>
+            <span>预设主题 + 自定义颜色，游戏里看得清就行。</span>
+          </div>
+          <select id="overlay-theme-preset" aria-label="悬浮条主题预设">
+            <option value="pulse">心率红</option>
+            <option value="neon">赛博霓虹</option>
+            <option value="ice">冰蓝 HUD</option>
+            <option value="amber">琥珀电竞</option>
+            <option value="minimal">极简透明</option>
+            <option value="custom">自定义</option>
+          </select>
+        </div>
+        <div class="theme-controls">
+          <label><span>强调色</span><input id="theme-accent" type="color" value="#ff315d"></label>
+          <label><span>背景</span><input id="theme-background" type="color" value="#0a0c12"></label>
+          <label><span>文字</span><input id="theme-text" type="color" value="#f7f8fb"></label>
+          <label><span>歌词</span><input id="theme-lyric" type="color" value="#e8eaf0"></label>
+          <label class="range-control"><span>透明度</span><input id="theme-opacity" type="range" min="35" max="100" value="88"><output id="theme-opacity-value">88%</output></label>
+          <label class="range-control"><span>圆角</span><input id="theme-radius" type="range" min="8" max="30" value="18"><output id="theme-radius-value">18</output></label>
+          <label class="range-control"><span>字体</span><input id="theme-font-scale" type="range" min="80" max="130" value="100"><output id="theme-font-scale-value">100%</output></label>
+        </div>
+      </section>
+
       <section class="dashboard">
         <article class="heart-card">
           <div class="status-row">
@@ -140,10 +166,11 @@
           <button id="lyrics-auto" type="button" class="secondary-button">恢复自动</button>
         </form>
         <div class="capture-lyrics-control">
-          <label class="switch-control">
-            <input id="lyrics-direct" type="checkbox">
-            <span>优先使用汽水音乐播放器直读</span>
-          </label>
+          <div class="lyrics-mode-control" role="radiogroup" aria-label="歌词读取方式">
+            <label><input type="radio" name="lyrics-mode" value="auto"> <span>自动：汽水直读优先，在线备用</span></label>
+            <label><input type="radio" name="lyrics-mode" value="soda"> <span>仅汽水直读</span></label>
+            <label><input type="radio" name="lyrics-mode" value="online"> <span>仅在线匹配</span></label>
+          </div>
           <label class="switch-control">
             <input id="lyrics-auto-hide" type="checkbox">
             <span>自动隐藏汽水桌面歌词</span>

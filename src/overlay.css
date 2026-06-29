@@ -1,6 +1,13 @@
 :root {
   color-scheme: dark;
   font-family: "Segoe UI Variable", "Microsoft YaHei UI", sans-serif;
+  --overlay-accent: #ff315d;
+  --overlay-bg: rgba(10, 12, 18, 0.88);
+  --overlay-text: #f7f8fb;
+  --overlay-lyric: #e8eaf0;
+  --overlay-blur: 16px;
+  --overlay-radius: 18px;
+  --overlay-font-scale: 100%;
 }
 
 * {
@@ -30,11 +37,12 @@ button {
   gap: 13px;
   padding: 10px 12px 10px 15px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  background: rgba(10, 12, 18, 0.88);
+  border-radius: var(--overlay-radius);
+  background: var(--overlay-bg);
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.4);
-  color: #f7f8fb;
-  backdrop-filter: blur(16px);
+  color: var(--overlay-text);
+  font-size: var(--overlay-font-scale);
+  backdrop-filter: blur(var(--overlay-blur));
   user-select: none;
 }
 
@@ -52,8 +60,8 @@ button {
 }
 
 .heart {
-  color: #ff315d;
-  filter: drop-shadow(0 2px 7px rgba(255, 49, 93, 0.55));
+  color: var(--overlay-accent);
+  filter: drop-shadow(0 2px 7px var(--overlay-accent));
   font-size: 21px;
   transform-origin: center;
 }
@@ -110,14 +118,14 @@ button {
 }
 
 #overlay-lyric {
-  color: #e8eaf0;
+  color: var(--overlay-lyric);
   font-size: 13px;
   font-weight: 600;
 }
 
 .weather-icon {
   width: 23px;
-  color: #ffc35b;
+  color: var(--overlay-accent);
   font-size: 21px;
   text-align: center;
 }
@@ -171,14 +179,14 @@ button {
 }
 
 #overlay-lock.active {
-  background: rgba(65, 151, 255, 0.16);
-  color: #69a9ff;
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--overlay-accent);
 }
 
 .game-mode .overlay-bar {
-  background: rgba(14, 16, 22, 0.96);
+  background: var(--overlay-bg);
   box-shadow: none;
-  backdrop-filter: none;
+  backdrop-filter: blur(min(var(--overlay-blur), 6px));
 }
 
 .game-mode .heart {

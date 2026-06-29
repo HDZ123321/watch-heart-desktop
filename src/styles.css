@@ -115,6 +115,72 @@ button:disabled {
   text-align: right;
 }
 
+.theme-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 18px;
+  background: rgba(18, 21, 29, 0.72);
+}
+
+.theme-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.theme-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.theme-heading strong {
+  font-size: 14px;
+}
+
+.theme-heading span {
+  color: #737c8f;
+  font-size: 11px;
+}
+
+.theme-heading select {
+  height: 38px;
+  min-width: 138px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 11px;
+  outline: none;
+  background: #10131b;
+  color: #eef1f7;
+}
+
+.theme-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+.theme-controls label:not(.range-control) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #a5acba;
+  font-size: 12px;
+}
+
+.theme-controls input[type="color"] {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  background: transparent;
+}
+
 .brand {
   gap: 12px;
 }
@@ -505,6 +571,37 @@ button:disabled {
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.lyrics-mode-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lyrics-mode-control label {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: #a5acba;
+  font-size: 12px;
+  user-select: none;
+}
+
+.lyrics-mode-control label:has(input:checked) {
+  border-color: rgba(255, 49, 93, 0.48);
+  background: rgba(255, 49, 93, 0.12);
+  color: #f4f6fb;
+}
+
+.lyrics-mode-control input {
+  accent-color: #ff315d;
 }
 
 #lyrics-direct-status {

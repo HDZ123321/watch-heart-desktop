@@ -33,6 +33,73 @@ const overlayControls = {
   gameMode: document.querySelector('#game-mode')
 };
 
+const themeControls = {
+  preset: document.querySelector('#overlay-theme-preset'),
+  accent: document.querySelector('#theme-accent'),
+  background: document.querySelector('#theme-background'),
+  text: document.querySelector('#theme-text'),
+  lyric: document.querySelector('#theme-lyric'),
+  opacity: document.querySelector('#theme-opacity'),
+  opacityValue: document.querySelector('#theme-opacity-value'),
+  radius: document.querySelector('#theme-radius'),
+  radiusValue: document.querySelector('#theme-radius-value'),
+  fontScale: document.querySelector('#theme-font-scale'),
+  fontScaleValue: document.querySelector('#theme-font-scale-value')
+};
+
+const THEME_PRESETS = {
+  pulse: {
+    accent: '#ff315d',
+    background: '#0a0c12',
+    text: '#f7f8fb',
+    lyric: '#e8eaf0',
+    opacity: 88,
+    blur: 16,
+    radius: 18,
+    fontScale: 100
+  },
+  neon: {
+    accent: '#00e5ff',
+    background: '#090021',
+    text: '#f6f0ff',
+    lyric: '#bff8ff',
+    opacity: 82,
+    blur: 20,
+    radius: 20,
+    fontScale: 104
+  },
+  ice: {
+    accent: '#61a8ff',
+    background: '#071522',
+    text: '#edf7ff',
+    lyric: '#d7ecff',
+    opacity: 84,
+    blur: 18,
+    radius: 16,
+    fontScale: 100
+  },
+  amber: {
+    accent: '#ffb02e',
+    background: '#180f05',
+    text: '#fff8ec',
+    lyric: '#ffe6b8',
+    opacity: 88,
+    blur: 12,
+    radius: 14,
+    fontScale: 102
+  },
+  minimal: {
+    accent: '#ffffff',
+    background: '#000000',
+    text: '#ffffff',
+    lyric: '#ffffff',
+    opacity: 58,
+    blur: 0,
+    radius: 12,
+    fontScale: 96
+  }
+};
+
 const weatherElements = {
   form: document.querySelector('#weather-form'),
   city: document.querySelector('#weather-city'),
@@ -53,7 +120,7 @@ const mediaElements = {
   searchTitle: document.querySelector('#lyrics-title'),
   searchArtist: document.querySelector('#lyrics-artist'),
   automatic: document.querySelector('#lyrics-auto'),
-  sodaDirect: document.querySelector('#lyrics-direct'),
+  modeInputs: [...document.querySelectorAll('input[name="lyrics-mode"]')],
   sodaAutoHide: document.querySelector('#lyrics-auto-hide'),
   sodaDirectReconnect: document.querySelector('#lyrics-direct-reconnect'),
   sodaDirectStatus: document.querySelector('#lyrics-direct-status')
@@ -67,6 +134,9 @@ let intentionalDisconnect = false;
 let samples = [];
 let lastKnownDevices = [];
 let lowResourceMode = false;
+let syncingThemeControls = false;
+let currentTheme = { preset: 'pulse', ...THEME_PRESETS.pulse };
+let themeUpdateTimer;
 
 function setStatus(type, text) {
   elements.statusDot.className = `status-dot ${type || ''}`.trim();
@@ -76,6 +146,47 @@ function setStatus(type, text) {
 function setControls(connected) {
   elements.connect.disabled = connected;
   elements.disconnect.disabled = !connected && !bluetoothDevice;
+}
+
+function readThemeControls() {
+  return {
+    preset: themeControls.preset.value,
+    accent: themeControls.accent.value,
+    background: themeControls.background.value,
+    text: themeControls.text.value,
+    lyric: themeControls.lyric.value,
+    opacity: Number(themeControls.opacity.value),
+    radius: Number(themeControls.radius.value),
+    fontScale: Number(themeControls.fontScale.value)
+  };
+}
+
+function syncThemeControls(theme) {
+  syncingThemeControls = true;
+  currentTheme = { ...currentTheme, ...theme };
+  themeControls.preset.value = currentTheme.preset || 'pulse';
+  themeControls.accent.value = currentTheme.accent;
+  themeControls.background.value = currentTheme.background;
+  themeControls.text.value = currentTheme.text;
+  themeControls.lyric.value = currentTheme.lyric;
+  themeControls.opacity.value = String(currentTheme.opacity);
+  themeControls.opacityValue.textContent = `${Math.round(currentTheme.opacity)}%`;
+  themeControls.radius.value = String(currentTheme.radius);
+  themeControls.radiusValue.textContent = String(Math.round(currentTheme.radius));
+  themeControls.fontScale.value = String(currentTheme.fontScale);
+  themeControls.fontScaleValue.textContent = `${Math.round(currentTheme.fontScale)}%`;
+  syncingThemeControls = false;
+}
+
+function publishTheme(theme, immediate = false) {
+  currentTheme = { ...currentTheme, ...theme };
+  themeControls.opacityValue.textContent = `${Math.round(currentTheme.opacity)}%`;
+  themeControls.radiusValue.textContent = String(Math.round(currentTheme.radius));
+  themeControls.fontScaleValue.textContent = `${Math.round(currentTheme.fontScale)}%`;
+  clearTimeout(themeUpdateTimer);
+  const send = () => window.desktop.setOverlayTheme(currentTheme);
+  if (immediate) send();
+  else themeUpdateTimer = setTimeout(send, 80);
 }
 
 function showModal() {
@@ -452,6 +563,7 @@ function lyricAt(lyrics, positionMs) {
 }
 
 let mediaState;
+let lyricsMode = 'auto';
 
 function updateMediaDisplay() {
   if (document.hidden || lowResourceMode) return;
@@ -474,6 +586,8 @@ function updateMediaDisplay() {
       ? '♪'
       : mediaState.lyricsStatus === 'loading'
         ? '正在匹配同步歌词…'
+        : mediaState.lyricsStatus === 'disabled'
+          ? '当前歌词方式未启用在线匹配'
         : mediaState.lyricsStatus === 'metadata-missing'
           ? '无法自动识别，请在下方手动输入歌曲名'
         : '未找到同步歌词');
@@ -578,6 +692,27 @@ overlayControls.gameMode.addEventListener('change', (event) => {
   localStorage.setItem('gameMode', String(event.target.checked));
   window.desktop.setGameMode(event.target.checked);
 });
+themeControls.preset.addEventListener('change', (event) => {
+  const preset = event.target.value;
+  const theme = { preset, ...(THEME_PRESETS[preset] || currentTheme) };
+  syncThemeControls(theme);
+  publishTheme(theme, true);
+});
+[
+  themeControls.accent,
+  themeControls.background,
+  themeControls.text,
+  themeControls.lyric,
+  themeControls.opacity,
+  themeControls.radius,
+  themeControls.fontScale
+].forEach((control) => {
+  control.addEventListener('input', () => {
+    if (syncingThemeControls) return;
+    themeControls.preset.value = 'custom';
+    publishTheme({ ...readThemeControls(), preset: 'custom' });
+  });
+});
 weatherElements.form.addEventListener('submit', (event) => {
   event.preventDefault();
   loadWeather(weatherElements.city.value, true);
@@ -602,15 +737,24 @@ mediaElements.form.addEventListener('submit', async (event) => {
 mediaElements.automatic.addEventListener('click', () => {
   window.desktop.useAutomaticLyrics();
 });
-mediaElements.sodaDirect.addEventListener('change', (event) => {
-  localStorage.setItem('lyricsDirect', String(event.target.checked));
-  window.desktop.setSodaDirectEnabled(event.target.checked);
-  mediaElements.sodaDirectStatus.textContent =
-    event.target.checked ? '正在连接汽水音乐播放器…' : '未开启';
-});
 mediaElements.sodaDirectReconnect.addEventListener('click', () => {
   mediaElements.sodaDirectStatus.textContent = '正在安装/重连汽水音乐…';
   window.desktop.reconnectSodaDirect();
+});
+mediaElements.modeInputs.forEach((input) => {
+  input.addEventListener('change', () => {
+    if (!input.checked) return;
+    lyricsMode = input.value;
+    localStorage.setItem('lyricsMode', lyricsMode);
+    window.desktop.setLyricsMode(lyricsMode);
+    mediaElements.sodaDirectStatus.textContent =
+      lyricsMode === 'online'
+        ? '当前仅使用在线歌词'
+        : lyricsMode === 'soda'
+          ? '当前仅使用汽水音乐播放器直读'
+          : '自动模式：汽水直读优先，在线歌词备用';
+    updateMediaDisplay();
+  });
 });
 mediaElements.sodaAutoHide.addEventListener('change', (event) => {
   localStorage.setItem('sodaAutoHide', String(event.target.checked));
@@ -632,6 +776,9 @@ window.desktop.onOverlaySettings((settings) => {
   overlayControls.width.value = String(settings.width);
   overlayControls.widthValue.textContent = String(settings.width);
   overlayControls.gameMode.checked = settings.gameMode;
+  syncThemeControls(settings.theme || currentTheme);
+  lyricsMode = settings.lyricsMode || (settings.lyricsDirectEnabled ? 'auto' : 'online');
+  for (const input of mediaElements.modeInputs) input.checked = input.value === lyricsMode;
   if (wasLowResourceMode && !lowResourceMode) {
     drawChart();
     updateMediaDisplay();
@@ -658,6 +805,7 @@ overlayControls.gameMode.checked = savedGameMode;
 window.desktop.setGameMode(savedGameMode);
 
 const savedLyricsDirectValue = localStorage.getItem('lyricsDirect');
+const savedLyricsMode = localStorage.getItem('lyricsMode');
 const savedLyricsDirect =
   savedLyricsDirectValue === null
     ? (
@@ -665,8 +813,13 @@ const savedLyricsDirect =
         localStorage.getItem('lyricsCapture') === 'true'
       )
     : savedLyricsDirectValue === 'true';
-mediaElements.sodaDirect.checked = savedLyricsDirect;
-window.desktop.setSodaDirectEnabled(savedLyricsDirect);
+lyricsMode = ['auto', 'soda', 'online'].includes(savedLyricsMode)
+  ? savedLyricsMode
+  : savedLyricsDirect
+    ? 'auto'
+    : 'online';
+for (const input of mediaElements.modeInputs) input.checked = input.value === lyricsMode;
+window.desktop.setLyricsMode(lyricsMode);
 
 const savedSodaAutoHide = localStorage.getItem('sodaAutoHide') === 'true';
 mediaElements.sodaAutoHide.checked = savedSodaAutoHide;

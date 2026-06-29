@@ -10,6 +10,7 @@ let activeTrackKey = '';
 let activeLyrics = [];
 let lyricsStatus = 'idle';
 let requestGeneration = 0;
+let onlineLyricsEnabled = true;
 
 function cleanText(value, maxLength = 200) {
   return typeof value === 'string'
@@ -266,7 +267,7 @@ async function processSessions(sessions, onUpdate) {
   const changedTrack = trackKey !== activeTrackKey;
   if (changedTrack) {
     activeLyrics = [];
-    lyricsStatus = 'loading';
+    lyricsStatus = onlineLyricsEnabled ? 'loading' : 'disabled';
   }
   activeTrackKey = trackKey;
   track.lyrics = changedTrack ? activeLyrics : undefined;
@@ -283,6 +284,7 @@ async function processSessions(sessions, onUpdate) {
 
   onUpdate(track);
 
+  if (!onlineLyricsEnabled) return;
   if (!changedTrack) return;
   const generation = ++requestGeneration;
 
@@ -317,6 +319,15 @@ async function startMediaMonitor(onUpdate) {
   unsubscribe = onSessionsChanged(update);
 }
 
+function setOnlineLyricsEnabled(enabled) {
+  const next = Boolean(enabled);
+  if (next === onlineLyricsEnabled) return;
+  onlineLyricsEnabled = next;
+  activeLyrics = [];
+  lyricsStatus = next ? 'idle' : 'disabled';
+  requestGeneration += 1;
+}
+
 async function stopMediaMonitor() {
   unsubscribe?.();
   unsubscribe = undefined;
@@ -326,6 +337,7 @@ async function stopMediaMonitor() {
 module.exports = {
   parseSyncedLyrics,
   searchSyncedLyrics,
+  setOnlineLyricsEnabled,
   startMediaMonitor,
   stopMediaMonitor
 };
