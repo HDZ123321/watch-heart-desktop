@@ -149,6 +149,7 @@ button:disabled {
 }
 
 .theme-heading {
+  /* Heading layout is reused by the game profile section. */
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -178,6 +179,71 @@ button:disabled {
   outline: none;
   background: #10131b;
   color: #eef1f7;
+}
+
+.game-profile-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.game-profile-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.game-profile-heading span,
+.game-session-list span {
+  color: #737c8f;
+  font-size: 11px;
+}
+
+.game-detection-options,
+.game-profile-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.game-profile-controls input {
+  min-width: 180px;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  outline: none;
+  background: #0f1219;
+  color: #edf0f6;
+}
+
+.game-profile-controls .secondary-button {
+  min-height: 38px;
+}
+
+.game-session-list {
+  display: grid;
+  max-height: 180px;
+  gap: 8px;
+  overflow: auto;
+}
+
+.game-session-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 12px;
+}
+
+.game-session-list strong {
+  color: #f4f6fa;
+}
+
+.game-session-list > div span {
+  text-align: right;
 }
 
 .theme-controls {
@@ -848,6 +914,13 @@ footer {
 }
 
 @media (max-width: 780px) {
+  .game-session-list > div {
+    display: grid;
+  }
+
+  .game-session-list > div span {
+    text-align: left;
+  }
   .game-toolbar {
     flex-wrap: wrap;
   }

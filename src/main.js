@@ -32,6 +32,7 @@ const {
   stopMediaMonitor
 } = require('./media-service');
 const { SodaLyricsDirectService } = require('./soda-lyrics-service');
+const { GameService } = require('./game-service');
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) app.quit();
@@ -59,6 +60,8 @@ let manualLyricsOverride = null;
 let sodaLyricsDirect;
 let initialLaunchHidden = process.argv.includes('--hidden');
 let updaterReady = false;
+let gameService;
+let applyingGameProfile = false;
 const OVERLAY_MIN_SCALE = 0.5;
 const OVERLAY_MAX_SCALE = 2;
 const OVERLAY_MIN_WIDTH = 360;
@@ -84,6 +87,39 @@ let overlayState = {
 
 function settingsPath() {
   return path.join(app.getPath('userData'), 'overlay-settings.json');
+}
+
+function overlayProfile() {
+  const bounds = overlayWindow?.getBounds();
+  return {
+    scale: overlayScale,
+    width: overlayWidth,
+    x: bounds?.x ?? overlayPosition?.x,
+    y: bounds?.y ?? overlayPosition?.y,
+    theme: overlayTheme,
+    gameMode,
+    passthrough: overlayPassthrough
+  };
+}
+
+function saveActiveGameProfile() {
+  if (!applyingGameProfile) gameService?.saveProfile(overlayProfile());
+}
+
+function applyGameProfile(profile) {
+  if (!profile) return;
+  applyingGameProfile = true;
+  setOverlayScale(profile.scale);
+  setOverlayWidth(profile.width);
+  setOverlayTheme(profile.theme);
+  setGameMode(profile.gameMode);
+  setOverlayPassthrough(profile.passthrough);
+  if (Number.isInteger(profile.x) && Number.isInteger(profile.y)) {
+    const window = createOverlayWindow();
+    const bounds = window.getBounds();
+    window.setBounds({ ...bounds, x: profile.x, y: profile.y }, false);
+  }
+  applyingGameProfile = false;
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -572,6 +608,7 @@ function createOverlayWindow() {
     sendOverlaySettings();
   });
   overlayWindow.on('move', saveOverlaySettings);
+  overlayWindow.on('moved', saveActiveGameProfile);
   overlayWindow.on('closed', () => {
     overlayWindow = undefined;
     overlayPassthrough = false;
@@ -598,6 +635,7 @@ function setOverlayPassthrough(enabled) {
     overlayWindow.setIgnoreMouseEvents(overlayPassthrough, { forward: true });
   }
   sendOverlaySettings();
+  saveActiveGameProfile();
 }
 
 function setOverlayControlsInteractive(interactive) {
@@ -609,6 +647,7 @@ function setGameMode(enabled) {
   gameMode = Boolean(enabled);
   sodaLyricsDirect?.setGameMode(gameMode);
   sendOverlaySettings();
+  saveActiveGameProfile();
 }
 
 function setOverlayScale(scale) {
@@ -621,6 +660,7 @@ function setOverlayScale(scale) {
   resizeOverlayWindow(window);
   saveOverlaySettings();
   sendOverlaySettings();
+  saveActiveGameProfile();
 }
 
 function setOverlayWidth(width) {
@@ -632,12 +672,14 @@ function setOverlayWidth(width) {
   resizeOverlayWindow(window);
   saveOverlaySettings();
   sendOverlaySettings();
+  saveActiveGameProfile();
 }
 
 function setOverlayTheme(theme) {
   overlayTheme = normalizeOverlayTheme({ ...overlayTheme, ...(theme || {}) });
   saveOverlaySettings();
   sendOverlaySettings();
+  saveActiveGameProfile();
 }
 
 function setLyricsMode(mode) {
@@ -726,6 +768,7 @@ function createWindow() {
     publishSodaDirectStatus(sodaLyricsDirect?.lastStatus || '未开启');
     sendOverlaySettings();
     sendAppSettings();
+    gameService?.emit();
   });
   mainWindow.on('show', () => {
     mainWindow.webContents.send('media-state', overlayState.media);
@@ -735,6 +778,20 @@ function createWindow() {
 
 app.whenReady().then(async () => {
   loadOverlaySettings();
+  gameService = new GameService({
+    userDataPath: app.getPath('userData'),
+    onState: (state) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('game-state', state);
+      }
+    },
+    onGameChanged: ({ previous, current }) => {
+      if (previous) gameService.saveProfile(overlayProfile(), previous);
+      applyGameProfile(gameService.profileFor(current));
+      if (current && gameService.data.autoShow) setOverlayVisible(true);
+      if (!current && gameService.data.autoHide) setOverlayVisible(false);
+    }
+  });
 
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback) => {
@@ -826,6 +883,26 @@ app.whenReady().then(async () => {
     setGameMode(enabled);
   });
 
+  ipcMain.on('game-detection-settings', (event, settings) => {
+    if (!isMainSender(event)) return;
+    gameService.updateSettings(settings);
+  });
+
+  ipcMain.on('game-add-custom', (event, game) => {
+    if (!isMainSender(event)) return;
+    gameService.addCustom(game);
+  });
+
+  ipcMain.on('game-save-profile', (event) => {
+    if (!isMainSender(event)) return;
+    gameService.saveProfile(overlayProfile());
+  });
+
+  ipcMain.on('game-clear-sessions', (event) => {
+    if (!isMainSender(event)) return;
+    gameService.clearSessions();
+  });
+
   ipcMain.on('soda-direct-toggle', (event, enabled) => {
     if (!isMainSender(event)) return;
     setLyricsMode(Boolean(enabled) ? 'auto' : 'online');
@@ -867,6 +944,7 @@ app.whenReady().then(async () => {
       zone: String(state?.zone || '').slice(0, 40),
       zoneLevel: String(state?.zoneLevel || 'idle').slice(0, 20)
     };
+    if (overlayState.bpm) gameService.record(overlayState.bpm, overlayState.zoneLevel);
     sendOverlayState();
   });
 
@@ -929,6 +1007,11 @@ app.whenReady().then(async () => {
   await createTray();
   createWindow();
   createOverlayWindow();
+  if (!gameService.data.defaultProfile) {
+    gameService.data.defaultProfile = overlayProfile();
+    gameService.save();
+  }
+  gameService.start();
   setupAutoUpdater();
   setTimeout(() => checkForUpdates(false), 5000);
   startMediaMonitor((media) => {
@@ -971,6 +1054,7 @@ app.on('will-quit', () => {
 app.on('before-quit', () => {
   isQuitting = true;
   clearTimeout(settingsSaveTimer);
+  gameService?.stop();
   sodaLyricsDirect?.stop();
   stopMediaMonitor();
 });

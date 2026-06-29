@@ -136,6 +136,18 @@ const mediaElements = {
   sodaDirectStatus: document.querySelector('#lyrics-direct-status')
 };
 
+const gameControls = {
+  enabled: document.querySelector('#game-detection-enabled'),
+  autoShow: document.querySelector('#game-auto-show'),
+  autoHide: document.querySelector('#game-auto-hide'),
+  status: document.querySelector('#active-game-status'),
+  name: document.querySelector('#game-profile-name'),
+  executable: document.querySelector('#game-profile-exe'),
+  save: document.querySelector('#game-profile-save'),
+  clear: document.querySelector('#game-session-clear'),
+  sessions: document.querySelector('#game-session-list')
+};
+
 let bluetoothDevice;
 let heartRateCharacteristic;
 let reconnectTimer;
@@ -149,6 +161,49 @@ let currentTheme = { preset: 'pulse', ...THEME_PRESETS.pulse };
 let themeUpdateTimer;
 let heartZoneSettings = readHeartZoneSettings();
 let lastAlarmAt = 0;
+
+function formatBpm(value) {
+  return value == null ? '--' : String(value);
+}
+
+function formatDuration(ms) {
+  const minutes = Math.max(1, Math.round(Number(ms || 0) / 60000));
+  if (minutes < 60) return `${minutes} 分钟`;
+  return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+}
+
+function renderGameState(state) {
+  gameControls.enabled.checked = state.enabled !== false;
+  gameControls.autoShow.checked = state.autoShow !== false;
+  gameControls.autoHide.checked = state.autoHide !== false;
+  gameControls.status.textContent = state.activeGame
+    ? `正在记录：${state.activeGame.name} (${state.activeGame.executable})`
+    : '当前未检测到游戏';
+  if (state.activeGame) {
+    gameControls.name.value = state.activeGame.name;
+    gameControls.executable.value = state.activeGame.executable;
+  }
+  gameControls.sessions.replaceChildren();
+  const sessions = [state.activeSession, ...(state.sessions || [])].filter(Boolean);
+  if (!sessions.length) {
+    const empty = document.createElement('span');
+    empty.textContent = '暂无游戏场次记录';
+    gameControls.sessions.append(empty);
+    return;
+  }
+  for (const session of sessions.slice(0, 8)) {
+    const row = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = `${session.endedAt ? '' : '进行中 · '}${session.gameName}`;
+    const stats = document.createElement('span');
+    stats.textContent =
+      `${new Date(session.startedAt).toLocaleString()} · ${formatDuration(session.durationMs)} · ` +
+      `平均 ${formatBpm(session.averageBpm)} · 最高 ${formatBpm(session.maxBpm)} BPM · ` +
+      `危险 ${session.dangerEvents || 0} 次`;
+    row.append(title, stats);
+    gameControls.sessions.append(row);
+  }
+}
 
 function setStatus(type, text) {
   elements.statusDot.className = `status-dot ${type || ''}`.trim();
@@ -695,6 +750,30 @@ overlayControls.gameMode.addEventListener('change', (event) => {
   localStorage.setItem('gameMode', String(event.target.checked));
   window.desktop.setGameMode(event.target.checked);
 });
+function updateGameDetectionSettings() {
+  window.desktop.setGameDetectionSettings({
+    enabled: gameControls.enabled.checked,
+    autoShow: gameControls.autoShow.checked,
+    autoHide: gameControls.autoHide.checked
+  });
+}
+gameControls.enabled.addEventListener('change', updateGameDetectionSettings);
+gameControls.autoShow.addEventListener('change', updateGameDetectionSettings);
+gameControls.autoHide.addEventListener('change', updateGameDetectionSettings);
+gameControls.save.addEventListener('click', () => {
+  const executable = gameControls.executable.value.trim();
+  if (executable) {
+    window.desktop.addCustomGame({
+      executable,
+      name: gameControls.name.value.trim() || executable
+    });
+  }
+  window.desktop.saveCurrentGameProfile();
+  gameControls.status.textContent = '已保存当前游戏悬浮条配置';
+});
+gameControls.clear.addEventListener('click', () => {
+  window.desktop.clearGameSessions();
+});
 [
   heartZoneControls.warm,
   heartZoneControls.high,
@@ -803,6 +882,7 @@ window.desktop.onMediaState((media) => {
 window.desktop.onSodaDirectStatus((status) => {
   mediaElements.sodaDirectStatus.textContent = status;
 });
+window.desktop.onGameState(renderGameState);
 window.addEventListener('resize', drawChart);
 syncHeartZoneControls();
 drawChart();

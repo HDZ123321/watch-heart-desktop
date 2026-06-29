@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self'; script-src 'self'
+      content="default-src 'self'; style-src 'self'; script-src 'self'"
     >
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Watch Heart</title>
@@ -64,6 +64,30 @@
           <input id="game-mode" type="checkbox">
           <span>低占用游戏模式</span>
         </label>
+      </section>
+
+      <section class="theme-card">
+        <div class="game-profile-heading">
+          <div>
+            <strong>游戏自动识别与场次统计</strong>
+            <span id="active-game-status">当前未检测到游戏</span>
+          </div>
+          <label class="switch-control">
+            <input id="game-detection-enabled" type="checkbox" checked>
+            <span>自动识别</span>
+          </label>
+        </div>
+        <div class="game-detection-options">
+          <label class="switch-control"><input id="game-auto-show" type="checkbox" checked><span>进入游戏自动显示</span></label>
+          <label class="switch-control"><input id="game-auto-hide" type="checkbox" checked><span>退出游戏自动隐藏</span></label>
+        </div>
+        <div class="game-profile-controls">
+          <input id="game-profile-name" type="text" maxlength="80" placeholder="游戏名称">
+          <input id="game-profile-exe" type="text" maxlength="100" placeholder="进程名，例如 game.exe">
+          <button id="game-profile-save" type="button" class="secondary-button">保存当前悬浮条配置</button>
+          <button id="game-session-clear" type="button" class="secondary-button">清空统计</button>
+        </div>
+        <div id="game-session-list" class="game-session-list"><span>暂无游戏场次记录</span></div>
       </section>
 
       <section class="theme-card">
