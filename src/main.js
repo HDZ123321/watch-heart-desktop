@@ -11,6 +11,7 @@ const {
 } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
+const { autoUpdater } = require('electron-updater');
 
 if (app.isPackaged) {
   process.env.WINDOWS_MEDIA_SESSIONS_BACKEND = path.join(
@@ -57,6 +58,7 @@ let automaticMediaState = null;
 let manualLyricsOverride = null;
 let sodaLyricsDirect;
 let initialLaunchHidden = process.argv.includes('--hidden');
+let updaterReady = false;
 const OVERLAY_MIN_SCALE = 0.5;
 const OVERLAY_MAX_SCALE = 2;
 const OVERLAY_MIN_WIDTH = 360;
@@ -196,6 +198,75 @@ function sendAppSettings() {
   mainWindow.webContents.send('app-settings', {
     autoStart: isAutoStartEnabled(),
     trayAvailable: Boolean(tray)
+  });
+}
+
+function sendUpdateStatus(status) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  mainWindow.webContents.send('update-status', {
+    state: String(status?.state || 'idle'),
+    message: String(status?.message || '').slice(0, 160),
+    version: status?.version ? String(status.version).slice(0, 40) : '',
+    percent: Number.isFinite(Number(status?.percent))
+      ? Math.round(Number(status.percent))
+      : null
+  });
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.on('checking-for-update', () => {
+    sendUpdateStatus({ state: 'checking', message: '正在检查更新…' });
+  });
+  autoUpdater.on('update-available', (info) => {
+    sendUpdateStatus({
+      state: 'available',
+      message: `发现新版本 ${info.version}，正在下载…`,
+      version: info.version
+    });
+  });
+  autoUpdater.on('update-not-available', () => {
+    sendUpdateStatus({ state: 'none', message: '当前已是最新版本' });
+  });
+  autoUpdater.on('download-progress', (progress) => {
+    sendUpdateStatus({
+      state: 'downloading',
+      message: `正在下载更新 ${Math.round(progress.percent || 0)}%`,
+      percent: progress.percent
+    });
+  });
+  autoUpdater.on('update-downloaded', (info) => {
+    sendUpdateStatus({
+      state: 'downloaded',
+      message: `新版本 ${info.version} 已下载，点击安装并重启`,
+      version: info.version
+    });
+  });
+  autoUpdater.on('error', (error) => {
+    sendUpdateStatus({
+      state: 'error',
+      message: `更新检查失败：${error.message || error}`
+    });
+  });
+  updaterReady = true;
+}
+
+function checkForUpdates(manual = false) {
+  if (!app.isPackaged) {
+    sendUpdateStatus({
+      state: 'dev',
+      message: '开发模式不检查更新，打包安装版后生效'
+    });
+    return;
+  }
+  if (!updaterReady) setupAutoUpdater();
+  if (manual) sendUpdateStatus({ state: 'checking', message: '正在检查更新…' });
+  autoUpdater.checkForUpdates().catch((error) => {
+    sendUpdateStatus({
+      state: 'error',
+      message: `更新检查失败：${error.message || error}`
+    });
   });
 }
 
@@ -608,6 +679,17 @@ app.whenReady().then(async () => {
     setAutoStart(Boolean(enabled));
   });
 
+  ipcMain.on('check-for-updates', (event) => {
+    if (!isMainSender(event)) return;
+    checkForUpdates(true);
+  });
+
+  ipcMain.on('install-update', (event) => {
+    if (!isMainSender(event)) return;
+    isQuitting = true;
+    autoUpdater.quitAndInstall(false, true);
+  });
+
   ipcMain.on('overlay-toggle', (event, visible) => {
     if (!isMainSender(event)) return;
     setOverlayVisible(Boolean(visible));
@@ -686,7 +768,8 @@ app.whenReady().then(async () => {
       ...overlayState,
       bpm: Number.isFinite(bpm) && bpm > 0 && bpm <= 255 ? bpm : null,
       connected: Boolean(state?.connected),
-      zone: String(state?.zone || '').slice(0, 40)
+      zone: String(state?.zone || '').slice(0, 40),
+      zoneLevel: String(state?.zoneLevel || 'idle').slice(0, 20)
     };
     sendOverlayState();
   });
@@ -784,6 +867,8 @@ app.whenReady().then(async () => {
   await createTray();
   createWindow();
   createOverlayWindow();
+  setupAutoUpdater();
+  setTimeout(() => checkForUpdates(false), 5000);
   startMediaMonitor((media) => {
     publishMediaState(media);
   }).catch((error) => {

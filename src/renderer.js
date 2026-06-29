@@ -5,6 +5,9 @@ const MAX_POINTS = 120;
 const elements = {
   alwaysOnTop: document.querySelector('#always-on-top'),
   autoStart: document.querySelector('#auto-start'),
+  checkUpdate: document.querySelector('#check-update'),
+  installUpdate: document.querySelector('#install-update'),
+  updateStatus: document.querySelector('#update-status'),
   statusDot: document.querySelector('#status-dot'),
   statusText: document.querySelector('#status-text'),
   deviceName: document.querySelector('#device-name'),
@@ -31,6 +34,13 @@ const overlayControls = {
   widthValue: document.querySelector('#overlay-width-value'),
   passthrough: document.querySelector('#overlay-passthrough'),
   gameMode: document.querySelector('#game-mode')
+};
+
+const heartZoneControls = {
+  warm: document.querySelector('#zone-warm-threshold'),
+  high: document.querySelector('#zone-high-threshold'),
+  danger: document.querySelector('#zone-danger-threshold'),
+  alarm: document.querySelector('#zone-alarm-enabled')
 };
 
 const themeControls = {
@@ -137,6 +147,8 @@ let lowResourceMode = false;
 let syncingThemeControls = false;
 let currentTheme = { preset: 'pulse', ...THEME_PRESETS.pulse };
 let themeUpdateTimer;
+let heartZoneSettings = readHeartZoneSettings();
+let lastAlarmAt = 0;
 
 function setStatus(type, text) {
   elements.statusDot.className = `status-dot ${type || ''}`.trim();
@@ -146,6 +158,14 @@ function setStatus(type, text) {
 function setControls(connected) {
   elements.connect.disabled = connected;
   elements.disconnect.disabled = !connected && !bluetoothDevice;
+}
+
+function renderUpdateStatus(status) {
+  const message = status?.message || '自动更新已启用';
+  elements.updateStatus.textContent = message;
+  elements.updateStatus.title = message;
+  elements.checkUpdate.disabled = ['checking', 'downloading'].includes(status?.state);
+  elements.installUpdate.classList.toggle('hidden', status?.state !== 'downloaded');
 }
 
 function readThemeControls() {
@@ -187,6 +207,66 @@ function publishTheme(theme, immediate = false) {
   const send = () => window.desktop.setOverlayTheme(currentTheme);
   if (immediate) send();
   else themeUpdateTimer = setTimeout(send, 80);
+}
+
+function normalizeHeartZoneSettings(settings) {
+  const warm = Math.min(180, Math.max(50, Number(settings?.warm) || 100));
+  const high = Math.min(220, Math.max(warm + 5, Number(settings?.high) || 140));
+  const danger = Math.min(240, Math.max(high + 5, Number(settings?.danger) || 170));
+  return {
+    warm,
+    high,
+    danger,
+    alarm: Boolean(settings?.alarm)
+  };
+}
+
+function readHeartZoneSettings() {
+  try {
+    return normalizeHeartZoneSettings(
+      JSON.parse(localStorage.getItem('heartZoneSettings') || '{}')
+    );
+  } catch {
+    return normalizeHeartZoneSettings({});
+  }
+}
+
+function syncHeartZoneControls() {
+  heartZoneControls.warm.value = String(heartZoneSettings.warm);
+  heartZoneControls.high.value = String(heartZoneSettings.high);
+  heartZoneControls.danger.value = String(heartZoneSettings.danger);
+  heartZoneControls.alarm.checked = heartZoneSettings.alarm;
+}
+
+function saveHeartZoneSettings() {
+  heartZoneSettings = normalizeHeartZoneSettings({
+    warm: heartZoneControls.warm.value,
+    high: heartZoneControls.high.value,
+    danger: heartZoneControls.danger.value,
+    alarm: heartZoneControls.alarm.checked
+  });
+  localStorage.setItem('heartZoneSettings', JSON.stringify(heartZoneSettings));
+  syncHeartZoneControls();
+}
+
+function playDangerAlarm() {
+  if (!heartZoneSettings.alarm || Date.now() - lastAlarmAt < 5000) return;
+  lastAlarmAt = Date.now();
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  const audio = new AudioContextClass();
+  const oscillator = audio.createOscillator();
+  const gain = audio.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.setValueAtTime(880, audio.currentTime);
+  oscillator.frequency.setValueAtTime(660, audio.currentTime + 0.16);
+  gain.gain.setValueAtTime(0.0001, audio.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.16, audio.currentTime + 0.02);
+  gain.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.34);
+  oscillator.connect(gain).connect(audio.destination);
+  oscillator.start();
+  oscillator.stop(audio.currentTime + 0.36);
+  setTimeout(() => audio.close().catch(() => {}), 600);
 }
 
 function showModal() {
@@ -237,10 +317,11 @@ function parseHeartRate(dataView) {
 }
 
 function zoneFor(bpm) {
-  if (bpm < 60) return ['zone-low', '低强度'];
-  if (bpm < 100) return ['zone-normal', '舒缓区间'];
-  if (bpm < 140) return ['zone-warm', '活跃区间'];
-  return ['zone-high', '高强度'];
+  if (bpm >= heartZoneSettings.danger) return ['zone-danger', '危险区间', 'danger'];
+  if (bpm >= heartZoneSettings.high) return ['zone-high', '高强度', 'high'];
+  if (bpm >= heartZoneSettings.warm) return ['zone-warm', '活跃区间', 'warm'];
+  if (bpm < 60) return ['zone-low', '低强度', 'low'];
+  return ['zone-normal', '舒缓区间', 'normal'];
 }
 
 function updateHeartRate(bpm) {
@@ -253,9 +334,10 @@ function updateHeartRate(bpm) {
     `${Math.max(0.28, 60 / bpm)}s`
   );
 
-  const [zoneClass, zoneLabel] = zoneFor(bpm);
+  const [zoneClass, zoneLabel, zoneLevel] = zoneFor(bpm);
   elements.zone.className = `zone-pill ${zoneClass}`;
   elements.zone.textContent = zoneLabel;
+  if (zoneLevel === 'danger') playDangerAlarm();
 
   samples.push({ bpm, time: Date.now() });
   if (samples.length > MAX_POINTS) samples.shift();
@@ -271,7 +353,8 @@ function updateHeartRate(bpm) {
   window.desktop.updateHeartRate({
     bpm,
     connected: true,
-    zone: zoneLabel
+    zone: zoneLabel,
+    zoneLevel
   });
 }
 
@@ -380,7 +463,8 @@ function disconnect() {
   window.desktop.updateHeartRate({
     bpm: null,
     connected: false,
-    zone: '等待心率'
+    zone: '等待心率',
+    zoneLevel: 'idle'
   });
 }
 
@@ -672,6 +756,14 @@ elements.alwaysOnTop.addEventListener('change', (event) => {
 elements.autoStart.addEventListener('change', (event) => {
   window.desktop.setAutoStart(event.target.checked);
 });
+elements.checkUpdate.addEventListener('click', () => {
+  renderUpdateStatus({ state: 'checking', message: '正在检查更新…' });
+  window.desktop.checkForUpdates();
+});
+elements.installUpdate.addEventListener('click', () => {
+  renderUpdateStatus({ state: 'installing', message: '正在重启安装更新…' });
+  window.desktop.installUpdate();
+});
 overlayControls.visible.addEventListener('change', (event) => {
   window.desktop.setOverlayVisible(event.target.checked);
 });
@@ -691,6 +783,14 @@ overlayControls.passthrough.addEventListener('change', (event) => {
 overlayControls.gameMode.addEventListener('change', (event) => {
   localStorage.setItem('gameMode', String(event.target.checked));
   window.desktop.setGameMode(event.target.checked);
+});
+[
+  heartZoneControls.warm,
+  heartZoneControls.high,
+  heartZoneControls.danger,
+  heartZoneControls.alarm
+].forEach((control) => {
+  control.addEventListener('change', saveHeartZoneSettings);
 });
 themeControls.preset.addEventListener('change', (event) => {
   const preset = event.target.value;
@@ -765,6 +865,7 @@ window.desktop.onBluetoothDevices(renderDeviceList);
 window.desktop.onAppSettings((settings) => {
   elements.autoStart.checked = settings.autoStart;
 });
+window.desktop.onUpdateStatus(renderUpdateStatus);
 window.desktop.onTrayHeartRateReconnect(reconnectFromTray);
 window.desktop.onOverlaySettings((settings) => {
   const wasLowResourceMode = lowResourceMode;
@@ -792,6 +893,7 @@ window.desktop.onSodaDirectStatus((status) => {
   mediaElements.sodaDirectStatus.textContent = status;
 });
 window.addEventListener('resize', drawChart);
+syncHeartZoneControls();
 drawChart();
 
 const savedWeatherCity = localStorage.getItem('weatherCity') || '香港';

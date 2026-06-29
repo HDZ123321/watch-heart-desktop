@@ -19,6 +19,15 @@ contextBridge.exposeInMainWorld('desktop', {
   onAppSettings: (handler) => {
     ipcRenderer.on('app-settings', (_event, settings) => handler(settings));
   },
+  checkForUpdates: () => {
+    ipcRenderer.send('check-for-updates');
+  },
+  installUpdate: () => {
+    ipcRenderer.send('install-update');
+  },
+  onUpdateStatus: (handler) => {
+    ipcRenderer.on('update-status', (_event, status) => handler(status));
+  },
   onTrayHeartRateReconnect: (handler) => {
     ipcRenderer.on('tray-heart-rate-reconnect', () => handler());
   },

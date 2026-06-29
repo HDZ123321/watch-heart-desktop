@@ -7,11 +7,12 @@
   "license": "MIT",
   "dependencies": {
     "@electron/asar": "^4.0.1",
+    "electron-updater": "^6.8.9",
     "windows-media-sessions": "^1.0.3"
   },
   "scripts": {
     "start": "electron .",
-    "pack": "electron-builder --win portable",
+    "pack": "electron-builder --win",
     "dist": "electron-builder --win nsis portable"
   },
   "devDependencies": {
@@ -21,6 +22,13 @@
   "build": {
     "appId": "com.local.watchheart",
     "productName": "Watch Heart",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "HDZ123321",
+        "repo": "watch-heart-desktop"
+      }
+    ],
     "asar": true,
     "asarUnpack": [
       "node_modules/windows-media-sessions/bin/**/*"
@@ -31,6 +39,7 @@
     ],
     "win": {
       "target": [
+        "nsis",
         "portable"
       ]
     },

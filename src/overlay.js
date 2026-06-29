@@ -6,6 +6,7 @@ const weatherLabel = document.querySelector('#overlay-weather-label');
 const lyricElement = document.querySelector('#overlay-lyric');
 const lockButton = document.querySelector('#overlay-lock');
 const controlsElement = document.querySelector('.overlay-controls');
+const zoneClasses = ['zone-low', 'zone-normal', 'zone-warm', 'zone-high', 'zone-danger'];
 let mediaState;
 let sodaLyric;
 let passthroughEnabled = false;
@@ -43,6 +44,13 @@ function applyTheme(theme = {}) {
   root.setProperty('--overlay-blur', `${Number(merged.blur) || 0}px`);
   root.setProperty('--overlay-radius', `${Number(merged.radius) || 18}px`);
   root.setProperty('--overlay-font-scale', `${Number(merged.fontScale) || 100}%`);
+}
+
+function applyHeartZone(level) {
+  document.body.classList.remove(...zoneClasses);
+  if (zoneClasses.includes(`zone-${level}`)) {
+    document.body.classList.add(`zone-${level}`);
+  }
 }
 
 function mediaPosition(media) {
@@ -100,6 +108,7 @@ function updateLyrics() {
 }
 
 window.overlay.onState((state) => {
+  applyHeartZone(state.zoneLevel || 'idle');
   if (state.connected && state.bpm) {
     bpmElement.textContent = String(state.bpm);
     heartElement.classList.add('active');

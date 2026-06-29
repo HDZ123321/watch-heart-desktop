@@ -197,6 +197,50 @@ button {
   transition: none;
 }
 
+body.zone-low .overlay-bar {
+  border-color: rgba(97, 168, 255, 0.32);
+}
+
+body.zone-normal .overlay-bar {
+  border-color: rgba(67, 209, 123, 0.32);
+}
+
+body.zone-warm .overlay-bar {
+  border-color: rgba(255, 176, 46, 0.48);
+}
+
+body.zone-warm .heart,
+body.zone-warm .weather-icon {
+  color: #ffb02e;
+}
+
+body.zone-high .overlay-bar {
+  border-color: rgba(255, 49, 93, 0.62);
+  background: rgba(42, 9, 18, 0.9);
+}
+
+body.zone-high .heart,
+body.zone-high .weather-icon {
+  color: #ff315d;
+}
+
+body.zone-danger .overlay-bar {
+  border-color: rgba(255, 35, 35, 0.9);
+  background: rgba(70, 0, 0, 0.94);
+  animation: danger-pulse 0.8s ease-in-out infinite;
+}
+
+body.zone-danger .heart,
+body.zone-danger .weather-icon,
+body.zone-danger #overlay-bpm {
+  color: #ff3b30;
+}
+
+@keyframes danger-pulse {
+  0%, 100% { box-shadow: 0 0 18px rgba(255, 35, 35, 0.24); }
+  50% { box-shadow: 0 0 34px rgba(255, 35, 35, 0.62); }
+}
+
 @media (max-width: 480px) {
   .overlay-bar {
     gap: 8px;

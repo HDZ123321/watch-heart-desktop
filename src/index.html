@@ -21,6 +21,11 @@
           </div>
         </div>
         <div class="topbar-controls">
+          <div class="update-control">
+            <button id="check-update" type="button" class="secondary-button">检查更新</button>
+            <button id="install-update" type="button" class="primary-button hidden">安装并重启</button>
+            <span id="update-status">自动更新已启用</span>
+          </div>
           <label class="pin-control">
             <input id="auto-start" type="checkbox">
             <span>开机启动</span>
@@ -101,6 +106,17 @@
             <span class="bpm-unit">BPM</span>
           </div>
           <div id="zone-pill" class="zone-pill zone-idle">等待心率</div>
+
+          <div class="heart-zone-settings">
+            <div class="zone-settings-title">心率区间与报警</div>
+            <label><span>热身</span><input id="zone-warm-threshold" type="number" min="50" max="220" value="100"><small>BPM</small></label>
+            <label><span>高强度</span><input id="zone-high-threshold" type="number" min="60" max="230" value="140"><small>BPM</small></label>
+            <label><span>危险</span><input id="zone-danger-threshold" type="number" min="70" max="240" value="170"><small>BPM</small></label>
+            <label class="switch-control zone-alarm-toggle">
+              <input id="zone-alarm-enabled" type="checkbox">
+              <span>危险区间声音提醒</span>
+            </label>
+          </div>
 
           <div class="actions">
             <button id="connect-button" class="primary-button">扫描并连接</button>
