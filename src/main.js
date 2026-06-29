@@ -1008,7 +1008,8 @@ app.whenReady().then(async () => {
 
   sodaLyricsDirect = new SodaLyricsDirectService({
     onLyric: publishSodaLyric,
-    onStatus: publishSodaDirectStatus
+    onStatus: publishSodaDirectStatus,
+    userDataPath: app.getPath('userData')
   });
   sodaLyricsDirect.setGameMode(gameMode);
   setOnlineLyricsEnabled(lyricsMode !== 'soda');

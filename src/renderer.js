@@ -330,7 +330,10 @@ function playDangerAlarm() {
 
 function showModal() {
   elements.modal.classList.remove('hidden');
-  elements.deviceList.innerHTML = '<div class="device-placeholder">正在搜索…</div>';
+  const placeholder = document.createElement('div');
+  placeholder.className = 'device-placeholder';
+  placeholder.textContent = '正在搜索…';
+  elements.deviceList.replaceChildren(placeholder);
 }
 
 function hideModal() {

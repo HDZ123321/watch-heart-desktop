@@ -1,5 +1,7 @@
+const bridgeToken = '__WATCH_HEART_BRIDGE_TOKEN__';
 const endpoint = 'http://127.0.0.1:19228/soda-lyric';
-const controlEndpoint = 'http://127.0.0.1:19228/soda-control';
+const controlEndpoint =
+  `http://127.0.0.1:19228/soda-control?token=${encodeURIComponent(bridgeToken)}`;
 let lastPayload = '';
 let lastSentAt = 0;
 let lastControlAt = 0;
@@ -93,7 +95,7 @@ function currentLyric() {
 }
 
 function send(payload) {
-  fetch(endpoint, {
+  fetch(`${endpoint}?token=${encodeURIComponent(bridgeToken)}`, {
     method: 'POST',
     mode: 'no-cors',
     cache: 'no-store',
@@ -102,7 +104,8 @@ function send(payload) {
     keepalive: true
   }).catch(() => {
     const image = new Image();
-    image.src = `${endpoint}?data=${encodeURIComponent(payload)}`;
+    image.src =
+      `${endpoint}?token=${encodeURIComponent(bridgeToken)}&data=${encodeURIComponent(payload)}`;
   });
 }
 

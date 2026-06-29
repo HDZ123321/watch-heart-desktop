@@ -1,6 +1,7 @@
 const { execFile, spawn } = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
+const crypto = require('node:crypto');
 const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
@@ -8,21 +9,35 @@ const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 const BRIDGE_HOST = '127.0.0.1';
 const BRIDGE_PORT = 19228;
-const BRIDGE_MARKER = 'WATCH_HEART_SODA_LYRICS_BRIDGE_V2';
+const BRIDGE_MARKER = 'WATCH_HEART_SODA_LYRICS_BRIDGE_V3';
 const UNINSTALL_KEY =
   'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall';
 
 class SodaLyricsDirectService {
-  constructor({ onLyric, onStatus }) {
+  constructor({ onLyric, onStatus, userDataPath }) {
     this.onLyric = onLyric;
     this.onStatus = onStatus;
+    this.tokenPath = path.join(userDataPath, 'soda-bridge-token');
     this.enabled = false;
     this.autoHideDesktopLyrics = false;
     this.server = undefined;
     this.lastStatus = '';
     this.lastLyricKey = '';
+    this.bridgeToken = this.loadBridgeToken();
     this.lastReceivedAt = 0;
     this.staleTimer = undefined;
+  }
+
+  loadBridgeToken() {
+    try {
+      const saved = fs.readFileSync(this.tokenPath, 'utf8').trim();
+      if (/^[A-Za-z0-9_-]{24}$/.test(saved)) return saved;
+    } catch {
+      // Create a new application-local bridge token.
+    }
+    const token = crypto.randomBytes(18).toString('base64url');
+    fs.writeFileSync(this.tokenPath, token, { encoding: 'utf8', mode: 0o600 });
+    return token;
   }
 
   setEnabled(enabled) {
@@ -135,7 +150,13 @@ class SodaLyricsDirectService {
       return;
     }
 
-    if (request.method === 'GET' && request.url === '/soda-control') {
+    const parsedUrl = new URL(request.url || '/', `http://${BRIDGE_HOST}`);
+    if (parsedUrl.searchParams.get('token') !== this.bridgeToken) {
+      response.writeHead(403, { 'Cache-Control': 'no-store' }).end();
+      return;
+    }
+
+    if (request.method === 'GET' && parsedUrl.pathname === '/soda-control') {
       if (!this.enabled) {
         response.writeHead(403, {
           'Access-Control-Allow-Origin': '*',
@@ -159,10 +180,11 @@ class SodaLyricsDirectService {
       return;
     }
 
-    if (request.method === 'GET' && request.url?.startsWith('/soda-lyric?')) {
+    if (request.method === 'GET' && parsedUrl.pathname === '/soda-lyric') {
       try {
-        const url = new URL(request.url, `http://${BRIDGE_HOST}`);
-        this.acceptPayload(JSON.parse(url.searchParams.get('data') || '{}'));
+        const encoded = parsedUrl.searchParams.get('data') || '';
+        if (encoded.length > 4096) throw new Error('Payload too large');
+        this.acceptPayload(JSON.parse(encoded));
         response.writeHead(204).end();
       } catch {
         response.writeHead(400).end();
@@ -170,18 +192,23 @@ class SodaLyricsDirectService {
       return;
     }
 
-    if (request.method !== 'POST' || request.url !== '/soda-lyric') {
+    if (request.method !== 'POST' || parsedUrl.pathname !== '/soda-lyric') {
       response.writeHead(404).end();
       return;
     }
 
     let body = '';
+    let rejected = false;
     request.setEncoding('utf8');
     request.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 4096) request.destroy();
+      if (body.length > 4096) {
+        rejected = true;
+        request.destroy();
+      }
     });
     request.on('end', () => {
+      if (rejected) return;
       try {
         this.acceptPayload(JSON.parse(body));
         response.writeHead(204).end();
@@ -273,7 +300,7 @@ class SodaLyricsDirectService {
     try {
       const asar = require('@electron/asar');
       const html = asar.extractFile(archive, 'desktopLyrics.html').toString('utf8');
-      return html.includes(BRIDGE_MARKER);
+      return html.includes(BRIDGE_MARKER) && html.includes(this.bridgeToken);
     } catch {
       return false;
     }
@@ -287,7 +314,7 @@ class SodaLyricsDirectService {
 
     const asar = require('@electron/asar');
     const html = asar.extractFile(archive, 'desktopLyrics.html').toString('utf8');
-    if (html.includes(BRIDGE_MARKER)) return;
+    if (html.includes(BRIDGE_MARKER) && html.includes(this.bridgeToken)) return;
     if (!html.includes('</body>')) {
       throw new Error('Unsupported SodaMusic desktopLyrics.html');
     }
@@ -310,6 +337,10 @@ class SodaLyricsDirectService {
           /\s*<!-- WATCH_HEART_SODA_LYRICS_BRIDGE_V\d+ -->\s*/g,
           '\n'
         );
+      const bridgeScript = fs.readFileSync(
+        path.join(__dirname, 'soda-lyrics-inject.js'),
+        'utf8'
+      ).replace('__WATCH_HEART_BRIDGE_TOKEN__', this.bridgeToken);
       const injectedHtml = cleanHtml.replace(
         '</body>',
         `    <script type="module" src="./watch-heart-lyrics.js"></script>\n` +
@@ -322,7 +353,8 @@ class SodaLyricsDirectService {
       );
       fs.writeFileSync(
         path.join(tempDirectory, 'watch-heart-lyrics.js'),
-        fs.readFileSync(path.join(__dirname, 'soda-lyrics-inject.js'))
+        bridgeScript,
+        'utf8'
       );
       await asar.createPackage(tempDirectory, tempAsar);
 
